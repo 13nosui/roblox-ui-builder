@@ -1,0 +1,11 @@
+{
+  "name": "UIBuilderPlugin",
+  "tree": {
+    "$className": "DataModel",
+    "ServerStorage": {
+      "UIBuilderPlugin": {
+        "$path": "src"
+      }
+    }
+  }
+}
