@@ -1,6 +1,7 @@
 -- src/init.server.lua
 
 local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
 
 -- 1. プラグインタブの設定
 local toolbar = plugin:CreateToolbar("UI Builder")
@@ -30,15 +31,14 @@ listLayout.Padding = UDim.new(0, 10)
 listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 listLayout.Parent = topBar
 
--- ツールバーの左側に少し余白を作る
 local padding = Instance.new("UIPadding")
 padding.PaddingLeft = UDim.new(0, 10)
 padding.Parent = topBar
 
--- ツールバーボタンを生成する便利関数
+-- ツールバーボタンを生成する関数
 local function createToolButton(text, color)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 100, 0, 30)
+	btn.Size = UDim2.new(0, 90, 0, 30) -- 少し幅を調整して4つ入るようにしました
 	btn.BackgroundColor3 = color
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Text = text
@@ -52,10 +52,11 @@ local function createToolButton(text, color)
 	return btn
 end
 
--- 3つのツール追加ボタンを作成（色分けして見やすくします）
+-- ★ ツール追加ボタン ＋ 新しい「エクスポート」ボタンを作成
 local btnFrame = createToolButton("＋ 四角形", Color3.fromRGB(0, 120, 215))
 local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113))
 local btnButton = createToolButton("＋ ボタン", Color3.fromRGB(155, 89, 182))
+local btnExport = createToolButton("📤 出力する", Color3.fromRGB(230, 126, 34)) -- オレンジ色
 
 local canvasArea = Instance.new("Frame")
 canvasArea.Size = UDim2.new(1, 0, 1, -40)
@@ -65,7 +66,7 @@ canvasArea.BorderSizePixel = 0
 canvasArea.ClipsDescendants = true
 canvasArea.Parent = background
 
--- ★ C: スケール（Scale）対応のドラッグ関数
+-- スケール（Scale）対応のドラッグ関数
 local function makeDraggable(guiObject)
 	local dragging = false
 	local dragInput
@@ -75,17 +76,13 @@ local function makeDraggable(guiObject)
 	local function update(input)
 		local delta = input.Position - dragStart
 		local parentSize = guiObject.Parent.AbsoluteSize
-
-		-- エラー防止（キャンバスサイズが0の時は計算しない）
 		if parentSize.X == 0 or parentSize.Y == 0 then
 			return
 		end
 
-		-- ★★ 魔法の計算式：移動量（ピクセル）をキャンバスの割合（Scale）に変換 ★★
 		local deltaScaleX = delta.X / parentSize.X
 		local deltaScaleY = delta.Y / parentSize.Y
 
-		-- 既存のScale位置に、移動分のScaleを足して更新（Offsetは使わない）
 		guiObject.Position = UDim2.new(startPos.X.Scale + deltaScaleX, 0, startPos.Y.Scale + deltaScaleY, 0)
 	end
 
@@ -94,8 +91,7 @@ local function makeDraggable(guiObject)
 			dragging = true
 			dragStart = input.Position
 			startPos = guiObject.Position
-
-			input.Changed:Connect(function()
+			input.Changed:Connect(function(state)
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
 				end
@@ -116,29 +112,25 @@ local function makeDraggable(guiObject)
 	end)
 end
 
--- ★ B&C: キャンバスにUI要素を生成する共通関数（種類とスケール対応）
+-- キャンバスにUI要素を生成する共通関数
 local function addElementToCanvas(className)
 	local newPart = Instance.new(className)
 	local canvasSize = canvasArea.AbsoluteSize
-
-	-- 生成時のサイズもScale（割合）で設定する（初期値は100px相当の割合）
 	local widthScale = canvasSize.X > 0 and 100 / canvasSize.X or 0.2
 	local heightScale = canvasSize.Y > 0 and 100 / canvasSize.Y or 0.2
 
 	newPart.Size = UDim2.new(widthScale, 0, heightScale, 0)
-	-- キャンバスの左上付近（10%の位置）にScaleで出現させる
 	newPart.Position = UDim2.new(0.1, 0, 0.1, 0)
 	newPart.Active = true
 
-	-- パーツの種類に応じた初期デザイン
 	if className == "Frame" then
 		newPart.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	elseif className == "TextLabel" then
 		newPart.Text = "テキスト"
 		newPart.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		newPart.BackgroundTransparency = 0.5 -- 背景を少し透過
+		newPart.BackgroundTransparency = 0.5
 		newPart.Font = Enum.Font.BuilderSansBold
-		newPart.TextScaled = true -- 枠のサイズに合わせて文字の大きさを自動調整
+		newPart.TextScaled = true
 	elseif className == "TextButton" then
 		newPart.Text = "ボタン"
 		newPart.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
@@ -150,7 +142,6 @@ local function addElementToCanvas(className)
 		corner.Parent = newPart
 	end
 
-	-- 選択しやすくするための枠線
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Color3.fromRGB(100, 100, 100)
 	stroke.Parent = newPart
@@ -159,7 +150,6 @@ local function addElementToCanvas(className)
 	makeDraggable(newPart)
 end
 
--- 各ボタンを押した時に、対応する要素をキャンバスに追加
 btnFrame.MouseButton1Click:Connect(function()
 	addElementToCanvas("Frame")
 end)
@@ -168,6 +158,42 @@ btnText.MouseButton1Click:Connect(function()
 end)
 btnButton.MouseButton1Click:Connect(function()
 	addElementToCanvas("TextButton")
+end)
+
+-- ★ 新機能：エクスポート処理
+btnExport.MouseButton1Click:Connect(function()
+	local starterGui = game:GetService("StarterGui")
+
+	-- 「UIBuilderExport」というフォルダ（ScreenGui）が既に有れば中身を消す（上書き用）
+	-- 無ければ新しく作成する
+	local exportGui = starterGui:FindFirstChild("UIBuilderExport")
+	if not exportGui then
+		exportGui = Instance.new("ScreenGui")
+		exportGui.Name = "UIBuilderExport"
+		exportGui.Parent = starterGui
+	else
+		exportGui:ClearAllChildren()
+	end
+
+	-- キャンバスの中にあるパーツをすべて探して複製（Clone）する
+	for _, element in ipairs(canvasArea:GetChildren()) do
+		if element:IsA("GuiObject") then
+			local clone = element:Clone()
+			-- ドラッグ用のイベントはスクリプトで動的に付けていたので、
+			-- Cloneされた側には引き継がれません（ゲームプレイ中に勝手に動かないので安全です！）
+			clone.Parent = exportGui
+		end
+	end
+
+	-- ボタンのテキストを一瞬変えて「成功した感」を演出する
+	local originalText = btnExport.Text
+	btnExport.Text = "✅ 完了！"
+	btnExport.BackgroundColor3 = Color3.fromRGB(46, 204, 113) -- 緑色に光らせる
+
+	task.delay(1.5, function()
+		btnExport.Text = originalText
+		btnExport.BackgroundColor3 = Color3.fromRGB(230, 126, 34) -- 元のオレンジ色に戻す
+	end)
 end)
 
 -- プラグインボタンの表示/非表示の切り替え
