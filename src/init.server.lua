@@ -45,7 +45,7 @@ canvasArea.BorderSizePixel = 0
 canvasArea.ClipsDescendants = true
 canvasArea.Parent = background
 
--- ★ 追加: UIをドラッグ可能にする関数
+-- ★ 差し替えるドラッグ機能（プラグイン環境対応版）
 local function makeDraggable(guiObject)
 	local dragging = false
 	local dragInput
@@ -54,17 +54,19 @@ local function makeDraggable(guiObject)
 
 	local function update(input)
 		local delta = input.Position - dragStart
-		-- 新しい位置を計算して適用
+		-- UDim2.new(X_Scale, X_Offset, Y_Scale, Y_Offset)
 		guiObject.Position =
 			UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
 
+	-- クリックされた瞬間
 	guiObject.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = true
 			dragStart = input.Position
 			startPos = guiObject.Position
 
+			-- クリックが離された時（マウスが四角形の外に出ても検知できるように input を監視）
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
@@ -73,14 +75,18 @@ local function makeDraggable(guiObject)
 		end
 	end)
 
+	-- マウスが動いた瞬間（四角形の上で）
 	guiObject.InputChanged:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			dragInput = input
 		end
 	end)
 
-	UserInputService.InputChanged:Connect(function(input)
-		if input == dragInput and dragging then
+	-- ★★ UserInputService の代わりに guiObject の親（Canvas）の InputChanged を使う ★★
+	-- プラグインの Widget 内では、親要素でマウス移動を監視するのが最も確実です
+	guiObject.Parent.InputChanged:Connect(function(input)
+		-- ドラッグ中で、かつマウス移動イベントだった場合のみ位置を更新
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
 			update(input)
 		end
 	end)
