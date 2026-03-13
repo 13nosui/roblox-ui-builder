@@ -5,9 +5,9 @@ local UserInputService = game:GetService("UserInputService")
 local toolbar = plugin:CreateToolbar("UI Builder Pro")
 local toggleButton = toolbar:CreateButton("Open Editor", "UI Builderを開く", "rbxassetid://4483345998")
 
-local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 850, 650, 600, 450)
+local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 850, 700, 600, 450)
 local widget = plugin:CreateDockWidgetPluginGui("UIBuilderCanvas", widgetInfo)
-widget.Title = "UI Builder - Professional"
+widget.Title = "UI Builder - Advanced Styles"
 
 -- --- 共通UIコンポーネント ---
 local function createLabel(text, parent)
@@ -36,7 +36,7 @@ local function createTextBox(parent)
 	return box
 end
 
--- --- 背景・レイアウト ---
+-- --- レイアウト構築 ---
 local background = Instance.new("Frame")
 background.Size = UDim2.new(1, 0, 1, 0)
 background.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -91,7 +91,7 @@ propertyPanel.Size = UDim2.new(0, 260, 1, 0)
 propertyPanel.Position = UDim2.new(1, -260, 0, 0)
 propertyPanel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 propertyPanel.BorderSizePixel = 0
-propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 800)
+propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 900)
 propertyPanel.ScrollBarThickness = 2
 propertyPanel.Parent = mainArea
 
@@ -116,6 +116,31 @@ propTitle.Parent = propertyPanel
 
 createLabel("CONTENT (TEXT)", propertyPanel)
 local textEditBox = createTextBox(propertyPanel)
+
+-- ★ FONT SELECTION
+local fontLabel = createLabel("FONT FAMILY", propertyPanel)
+local fontSelectBtn = Instance.new("TextButton")
+fontSelectBtn.Size = UDim2.new(1, 0, 0, 30)
+fontSelectBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+fontSelectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+fontSelectBtn.Text = "Gotham"
+fontSelectBtn.Font = Enum.Font.BuilderSansBold
+fontSelectBtn.TextSize = 13
+fontSelectBtn.Parent = propertyPanel
+Instance.new("UICorner", fontSelectBtn).CornerRadius = UDim.new(0, 4)
+
+-- 利用可能なフォントリスト
+local availableFonts = {
+	Enum.Font.Gotham,
+	Enum.Font.GothamBold,
+	Enum.Font.FredokaOne,
+	Enum.Font.LuckiestGuy,
+	Enum.Font.Roboto,
+	Enum.Font.Arcade,
+	Enum.Font.SciFi,
+	Enum.Font.Bangers,
+	Enum.Font.SpecialElite,
+}
 
 createLabel("CORNER RADIUS (px)", propertyPanel)
 local cornerEditBox = createTextBox(propertyPanel)
@@ -186,8 +211,14 @@ local function updatePanel()
 		return
 	end
 	propTitle.Text = selectedElement.ClassName
-	textEditBox.Text = (selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")) and selectedElement.Text
-		or "---"
+
+	local isText = selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")
+	textEditBox.Text = isText and selectedElement.Text or "---"
+	fontLabel.Visible = isText
+	fontSelectBtn.Visible = isText
+	if isText then
+		fontSelectBtn.Text = selectedElement.Font.Name
+	end
 
 	local corner = selectedElement:FindFirstChildOfClass("UICorner")
 	cornerEditBox.Text = corner and tostring(corner.CornerRadius.Offset) or "0"
@@ -222,9 +253,8 @@ local function selectElement(element)
 	updatePanel()
 end
 
--- --- ★ 反映イベント (ここを修正・追加しました) ---
+-- --- 反映イベント ---
 
--- 1. テキスト反映
 textEditBox.FocusLost:Connect(function()
 	if selectedElement and (selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")) then
 		selectedElement.Text = textEditBox.Text
@@ -233,7 +263,22 @@ textEditBox.FocusLost:Connect(function()
 	end
 end)
 
--- 2. 角丸反映
+-- ★ フォント切り替えロジック
+fontSelectBtn.MouseButton1Click:Connect(function()
+	if selectedElement and (selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")) then
+		local currentFont = selectedElement.Font
+		local nextIndex = 1
+		for i, f in ipairs(availableFonts) do
+			if f == currentFont then
+				nextIndex = (i % #availableFonts) + 1
+				break
+			end
+		end
+		selectedElement.Font = availableFonts[nextIndex]
+		updatePanel()
+	end
+end)
+
 cornerEditBox.FocusLost:Connect(function()
 	if selectedElement then
 		local num = tonumber(cornerEditBox.Text) or 0
@@ -242,18 +287,12 @@ cornerEditBox.FocusLost:Connect(function()
 	end
 end)
 
--- 3. ★ サイズ反映 (追加分)
 local function applySize()
 	if selectedElement then
 		local nx = tonumber(sizeX.Text) or selectedElement.AbsoluteSize.X
 		local ny = tonumber(sizeY.Text) or selectedElement.AbsoluteSize.Y
-
-		-- 数値で指定したときは、自動サイズを一旦OFFにする（そうしないと数値が無視されるため）
 		selectedElement.AutomaticSize = Enum.AutomaticSize.None
-
-		-- Scaleを0にしてOffsetだけで指定する（ピクセル単位で正確にするため）
 		selectedElement.Size = UDim2.new(0, nx, 0, ny)
-
 		task.wait(0.05)
 		updatePanel()
 	end
@@ -261,7 +300,6 @@ end
 sizeX.FocusLost:Connect(applySize)
 sizeY.FocusLost:Connect(applySize)
 
--- --- 4. パディング反映 (内容量優先モードへの切り替え付き) ---
 local function updatePadding()
 	if selectedElement then
 		local pad = selectedElement:FindFirstChildOfClass("UIPadding") or Instance.new("UIPadding", selectedElement)
@@ -269,17 +307,11 @@ local function updatePadding()
 		pad.PaddingBottom = UDim.new(0, tonumber(padB.Text) or 0)
 		pad.PaddingLeft = UDim.new(0, tonumber(padL.Text) or 0)
 		pad.PaddingRight = UDim.new(0, tonumber(padR.Text) or 0)
-
-		-- ★ ここがポイント！
-		-- パディングをいじった＝内容量に合わせたレイアウトをしたい、と判断し、
-		-- 指定サイズを (0,0) にリセットして AutomaticSize を XY に強制します。
-		-- これにより、指定サイズに縛られず「中身＋パディング」のサイズに吸着します。
 		if selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton") then
-			selectedElement.Size = UDim2.new(0, 0, 0, 0) -- 指定サイズを最小化
-			selectedElement.AutomaticSize = Enum.AutomaticSize.XY -- 内容優先モード
-			selectedElement.TextWrapped = false -- 自動サイズ時は折り返しをOFFにするのが一般的
+			selectedElement.Size = UDim2.new(0, 0, 0, 0)
+			selectedElement.AutomaticSize = Enum.AutomaticSize.XY
+			selectedElement.TextWrapped = false
 		end
-
 		task.wait(0.05)
 		updatePanel()
 	end
@@ -289,7 +321,6 @@ padB.FocusLost:Connect(updatePadding)
 padL.FocusLost:Connect(updatePadding)
 padR.FocusLost:Connect(updatePadding)
 
--- 5. オートレイアウト設定
 local function setAutoSize(mode)
 	if selectedElement then
 		selectedElement.AutomaticSize = mode
@@ -312,7 +343,7 @@ btnXY.MouseButton1Click:Connect(function()
 	setAutoSize(Enum.AutomaticSize.XY)
 end)
 
--- --- ドラッグ・選択ロジック ---
+-- ドラッグ・選択ロジック
 local isSelecting = false
 canvasArea.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -348,7 +379,6 @@ local function makeDraggable(guiObject)
 		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
 			local delta = input.Position - dragStart
 			local parentSize = canvasArea.AbsoluteSize
-			-- ドラッグ中はScaleを維持
 			guiObject.Position = UDim2.new(
 				startPos.X.Scale + (delta.X / parentSize.X),
 				0,
@@ -370,7 +400,7 @@ local function addElementToCanvas(className)
 		newPart.Text = "New Element"
 		newPart.BackgroundColor3 = className == "TextLabel" and Color3.fromRGB(255, 255, 255)
 			or Color3.fromRGB(46, 204, 113)
-		newPart.Font = Enum.Font.BuilderSansBold
+		newPart.Font = Enum.Font.GothamBold
 		newPart.TextSize = 18
 		newPart.TextScaled = false
 		local p = Instance.new("UIPadding", newPart)
