@@ -1,6 +1,7 @@
 -- src/init.server.lua
 
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService") -- ★ フレーム毎の処理用に新しく追加！
 
 local toolbar = plugin:CreateToolbar("UI Builder Pro")
 local toggleButton = toolbar:CreateButton("Open Editor", "UI Builderを開く", "rbxassetid://4483345998")
@@ -9,7 +10,6 @@ local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, fals
 local widget = plugin:CreateDockWidgetPluginGui("UIBuilderCanvas", widgetInfo)
 widget.Title = "UI Builder - Figma Pro"
 
--- ★ 重要：UIの重なり順を正しく計算させる最新モードに切り替え
 widget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 -- --- 共通UIコンポーネント ---
@@ -275,28 +275,29 @@ local btnNone, btnX, btnY, btnXY =
 	createAutoBtn("OFF", 0), createAutoBtn("↔ X", 0.25), createAutoBtn("↕ Y", 0.5), createAutoBtn("↔↕ XY", 0.75)
 
 -- ==========================================
--- ★ 完璧な暗幕付きカラーピッカー ★
+-- ★ 60fps ヌルヌル駆動カラーピッカー ★
 -- ==========================================
 
--- 1. 画面全体を覆ってクリックをブロックする暗幕
 local pickerBlocker = Instance.new("TextButton")
 pickerBlocker.Size = UDim2.new(1, 0, 1, 0)
 pickerBlocker.BackgroundTransparency = 0.5
 pickerBlocker.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 pickerBlocker.Text = ""
+pickerBlocker.AutoButtonColor = false
 pickerBlocker.ZIndex = 999
 pickerBlocker.Visible = false
-pickerBlocker.AutoButtonColor = false
 pickerBlocker.Parent = background
 
--- 2. ピッカー本体
-local colorPickerBase = Instance.new("Frame")
+local colorPickerBase = Instance.new("TextButton")
 colorPickerBase.Size = UDim2.new(0, 220, 0, 280)
 colorPickerBase.Position = UDim2.new(0.5, -110, 0.5, -140)
 colorPickerBase.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 colorPickerBase.BorderSizePixel = 0
-colorPickerBase.Active = true -- クリック貫通を完全に防ぐ
-colorPickerBase.Parent = pickerBlocker
+colorPickerBase.Text = ""
+colorPickerBase.AutoButtonColor = false
+colorPickerBase.ZIndex = 1000
+colorPickerBase.Visible = false
+colorPickerBase.Parent = background
 Instance.new("UICorner", colorPickerBase).CornerRadius = UDim.new(0, 8)
 local cpShadow = Instance.new("UIStroke", colorPickerBase)
 cpShadow.Color = Color3.fromRGB(20, 20, 20)
@@ -311,6 +312,7 @@ cpTitleUI.TextColor3 = Color3.fromRGB(255, 255, 255)
 cpTitleUI.Font = Enum.Font.BuilderSansBold
 cpTitleUI.TextSize = 14
 cpTitleUI.TextXAlignment = Enum.TextXAlignment.Left
+cpTitleUI.ZIndex = 1001
 cpTitleUI.Parent = colorPickerBase
 
 local closeCpBtn = Instance.new("TextButton")
@@ -321,6 +323,7 @@ closeCpBtn.Text = "✕"
 closeCpBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
 closeCpBtn.Font = Enum.Font.BuilderSansBold
 closeCpBtn.TextSize = 14
+closeCpBtn.ZIndex = 1001
 closeCpBtn.Parent = colorPickerBase
 
 local svArea = Instance.new("Frame")
@@ -328,12 +331,14 @@ svArea.Size = UDim2.new(0, 180, 0, 150)
 svArea.Position = UDim2.new(0, 20, 0, 40)
 svArea.BackgroundColor3 = Color3.fromHSV(0, 1, 1)
 svArea.Active = true
+svArea.ZIndex = 1001
 svArea.Parent = colorPickerBase
 Instance.new("UICorner", svArea).CornerRadius = UDim.new(0, 4)
 
 local satOverlay = Instance.new("Frame")
 satOverlay.Size = UDim2.new(1, 0, 1, 0)
 satOverlay.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+satOverlay.ZIndex = 1002
 satOverlay.Parent = svArea
 Instance.new("UICorner", satOverlay).CornerRadius = UDim.new(0, 4)
 local satGrad = Instance.new("UIGradient", satOverlay)
@@ -342,6 +347,7 @@ satGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), Nu
 local valOverlay = Instance.new("Frame")
 valOverlay.Size = UDim2.new(1, 0, 1, 0)
 valOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+valOverlay.ZIndex = 1003
 valOverlay.Parent = svArea
 Instance.new("UICorner", valOverlay).CornerRadius = UDim.new(0, 4)
 local valGrad = Instance.new("UIGradient", valOverlay)
@@ -352,6 +358,7 @@ local svCursor = Instance.new("Frame")
 svCursor.Size = UDim2.new(0, 12, 0, 12)
 svCursor.AnchorPoint = Vector2.new(0.5, 0.5)
 svCursor.BackgroundColor3 = Color3.new(1, 1, 1)
+svCursor.ZIndex = 1004
 svCursor.Parent = svArea
 Instance.new("UICorner", svCursor).CornerRadius = UDim.new(1, 0)
 local svCursorStroke = Instance.new("UIStroke", svCursor)
@@ -363,6 +370,7 @@ hueArea.Size = UDim2.new(0, 180, 0, 16)
 hueArea.Position = UDim2.new(0, 20, 0, 205)
 hueArea.BackgroundColor3 = Color3.new(1, 1, 1)
 hueArea.Active = true
+hueArea.ZIndex = 1001
 hueArea.Parent = colorPickerBase
 Instance.new("UICorner", hueArea).CornerRadius = UDim.new(0, 8)
 local hueGrad = Instance.new("UIGradient", hueArea)
@@ -381,6 +389,7 @@ hueCursor.Size = UDim2.new(0, 16, 0, 20)
 hueCursor.Position = UDim2.new(0, 0, 0.5, 0)
 hueCursor.AnchorPoint = Vector2.new(0.5, 0.5)
 hueCursor.BackgroundColor3 = Color3.new(1, 1, 1)
+hueCursor.ZIndex = 1002
 hueCursor.Parent = hueArea
 Instance.new("UICorner", hueCursor).CornerRadius = UDim.new(1, 0)
 local hueCursorStroke = Instance.new("UIStroke", hueCursor)
@@ -388,36 +397,65 @@ hueCursorStroke.Color = Color3.new(0, 0, 0)
 hueCursorStroke.Thickness = 2
 
 local confirmBtn = Instance.new("TextButton")
-confirmBtn.Size = UDim2.new(0, 180, 0, 30)
+confirmBtn.Size = UDim2.new(0, 140, 0, 30)
 confirmBtn.Position = UDim2.new(0, 20, 0, 235)
 confirmBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
 confirmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 confirmBtn.Text = "Confirm"
 confirmBtn.Font = Enum.Font.BuilderSansBold
 confirmBtn.TextSize = 13
+confirmBtn.ZIndex = 1001
 confirmBtn.Parent = colorPickerBase
 Instance.new("UICorner", confirmBtn).CornerRadius = UDim.new(0, 4)
 
--- カスタムピッカーの操作ロジック
+local colorPreview = Instance.new("Frame")
+colorPreview.Size = UDim2.new(0, 30, 0, 30)
+colorPreview.Position = UDim2.new(0, 170, 0, 235)
+colorPreview.BackgroundColor3 = Color3.new(1, 1, 1)
+colorPreview.ZIndex = 1001
+colorPreview.Parent = colorPickerBase
+Instance.new("UICorner", colorPreview).CornerRadius = UDim.new(0, 4)
+local prevStroke = Instance.new("UIStroke", colorPreview)
+prevStroke.Color = Color3.fromRGB(60, 60, 60)
+
 local currentHue, currentSat, currentVal = 0, 1, 1
 local activeColorCallback = nil
 
+-- ★ UI更新を最適化し、無駄な再描画を防ぐ
 local function updateColorPickerVisuals()
-	svArea.BackgroundColor3 = Color3.fromHSV(currentHue, 1, 1)
-	svCursor.Position = UDim2.new(currentSat, 0, 1 - currentVal, 0)
-	hueCursor.Position = UDim2.new(currentHue, 0, 0.5, 0)
-	if activeColorCallback then
-		activeColorCallback(Color3.fromHSV(currentHue, currentSat, currentVal))
+	local bgHsv = Color3.fromHSV(currentHue, 1, 1)
+	if svArea.BackgroundColor3 ~= bgHsv then
+		svArea.BackgroundColor3 = bgHsv
+	end
+
+	local svPos = UDim2.new(currentSat, 0, 1 - currentVal, 0)
+	if svCursor.Position ~= svPos then
+		svCursor.Position = svPos
+	end
+
+	local hPos = UDim2.new(currentHue, 0, 0.5, 0)
+	if hueCursor.Position ~= hPos then
+		hueCursor.Position = hPos
+	end
+
+	local finalColor = Color3.fromHSV(currentHue, currentSat, currentVal)
+	if colorPreview.BackgroundColor3 ~= finalColor then
+		colorPreview.BackgroundColor3 = finalColor
 	end
 end
 
+-- ★ 劇的改善：RunServiceを使って毎フレーム確実に位置を計算する最強のドラッグシステム
 local function setupSlider(area, isHue)
 	area.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			local dragging = true
-			local function update(pos)
-				local relX = math.clamp(pos.X - area.AbsolutePosition.X, 0, area.AbsoluteSize.X)
-				local relY = math.clamp(pos.Y - area.AbsolutePosition.Y, 0, area.AbsoluteSize.Y)
+
+			local function update()
+				-- マウスの位置を直接ウィジェットから取得 (これなら確実に最新の位置が取れます)
+				local mousePos = widget:GetRelativeMousePosition()
+				local relX = math.clamp(mousePos.X - area.AbsolutePosition.X, 0, area.AbsoluteSize.X)
+				local relY = math.clamp(mousePos.Y - area.AbsolutePosition.Y, 0, area.AbsoluteSize.Y)
+
 				if isHue then
 					currentHue = relX / area.AbsoluteSize.X
 				else
@@ -426,24 +464,25 @@ local function setupSlider(area, isHue)
 				end
 				updateColorPickerVisuals()
 			end
-			update(input.Position)
 
-			local function onMove(moveInput)
-				if dragging and moveInput.UserInputType == Enum.UserInputType.MouseMovement then
-					update(moveInput.Position)
+			update() -- クリックした瞬間の更新
+
+			-- 毎フレーム超高速でUIを更新
+			local loopConn
+			loopConn = RunService.Heartbeat:Connect(function()
+				if dragging then
+					update()
+				else
+					loopConn:Disconnect()
 				end
-			end
+			end)
 
-			-- どこをドラッグしても反応するように安全な2重監視
-			local moveConn1 = pickerBlocker.InputChanged:Connect(onMove)
-			local moveConn2 = colorPickerBase.InputChanged:Connect(onMove)
-
+			-- マウスを離した判定
 			local endConn
 			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
-					moveConn1:Disconnect()
-					moveConn2:Disconnect()
+					loopConn:Disconnect()
 					endConn:Disconnect()
 				end
 			end)
@@ -454,22 +493,27 @@ end
 setupSlider(svArea, false)
 setupSlider(hueArea, true)
 
+local function closePicker()
+	pickerBlocker.Visible = false
+	colorPickerBase.Visible = false
+end
+
 local function openCustomPicker(initialColor, callback)
 	activeColorCallback = callback
 	currentHue, currentSat, currentVal = initialColor:ToHSV()
 	updateColorPickerVisuals()
 	pickerBlocker.Visible = true
+	colorPickerBase.Visible = true
 end
 
--- 暗幕をクリックした時も閉じる
-pickerBlocker.MouseButton1Click:Connect(function()
-	pickerBlocker.Visible = false
-end)
-closeCpBtn.MouseButton1Click:Connect(function()
-	pickerBlocker.Visible = false
-end)
+pickerBlocker.MouseButton1Click:Connect(closePicker)
+closeCpBtn.MouseButton1Click:Connect(closePicker)
+
 confirmBtn.MouseButton1Click:Connect(function()
-	pickerBlocker.Visible = false
+	if activeColorCallback then
+		activeColorCallback(Color3.fromHSV(currentHue, currentSat, currentVal))
+	end
+	closePicker()
 end)
 -- ==========================================
 
