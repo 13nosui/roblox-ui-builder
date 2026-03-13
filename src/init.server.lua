@@ -5,9 +5,9 @@ local UserInputService = game:GetService("UserInputService")
 local toolbar = plugin:CreateToolbar("UI Builder Pro")
 local toggleButton = toolbar:CreateButton("Open Editor", "UI Builderを開く", "rbxassetid://4483345998")
 
-local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 850, 700, 600, 450)
+local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 850, 750, 600, 450)
 local widget = plugin:CreateDockWidgetPluginGui("UIBuilderCanvas", widgetInfo)
-widget.Title = "UI Builder - Advanced Styles"
+widget.Title = "UI Builder - Color Master"
 
 -- --- 共通UIコンポーネント ---
 local function createLabel(text, parent)
@@ -34,6 +34,24 @@ local function createTextBox(parent)
 	box.Parent = parent
 	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
 	return box
+end
+
+-- カラー入力用の3連ボックスを作成する関数
+local function createColorInput(parent)
+	local container = Instance.new("Frame")
+	container.Size = UDim2.new(1, 0, 0, 30)
+	container.BackgroundTransparency = 1
+	container.Parent = parent
+	Instance.new("UIListLayout", container).FillDirection = Enum.FillDirection.Horizontal
+	Instance.new("UIListLayout", container).Padding = UDim.new(0, 5)
+
+	local function makeBox(placeholder)
+		local b = createTextBox(container)
+		b.Size = UDim2.new(0.31, 0, 1, 0)
+		b.PlaceholderText = placeholder
+		return b
+	end
+	return makeBox("R"), makeBox("G"), makeBox("B")
 end
 
 -- --- レイアウト構築 ---
@@ -91,7 +109,7 @@ propertyPanel.Size = UDim2.new(0, 260, 1, 0)
 propertyPanel.Position = UDim2.new(1, -260, 0, 0)
 propertyPanel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 propertyPanel.BorderSizePixel = 0
-propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 900)
+propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 1000)
 propertyPanel.ScrollBarThickness = 2
 propertyPanel.Parent = mainArea
 
@@ -117,7 +135,6 @@ propTitle.Parent = propertyPanel
 createLabel("CONTENT (TEXT)", propertyPanel)
 local textEditBox = createTextBox(propertyPanel)
 
--- ★ FONT SELECTION
 local fontLabel = createLabel("FONT FAMILY", propertyPanel)
 local fontSelectBtn = Instance.new("TextButton")
 fontSelectBtn.Size = UDim2.new(1, 0, 0, 30)
@@ -141,6 +158,14 @@ local availableFonts = {
 	Enum.Font.Bangers,
 	Enum.Font.SpecialElite,
 }
+
+-- ★ COLOR (BACKGROUND)
+createLabel("BACKGROUND COLOR (R, G, B)", propertyPanel)
+local bgR, bgG, bgB = createColorInput(propertyPanel)
+
+-- ★ COLOR (TEXT)
+local txtColorLabel = createLabel("TEXT COLOR (R, G, B)", propertyPanel)
+local txtR, txtG, txtB = createColorInput(propertyPanel)
 
 createLabel("CORNER RADIUS (px)", propertyPanel)
 local cornerEditBox = createTextBox(propertyPanel)
@@ -170,10 +195,7 @@ local function createPadBox()
 	b.TextSize = 11
 	return b
 end
-local padT = createPadBox()
-local padB = createPadBox()
-local padL = createPadBox()
-local padR = createPadBox()
+local padT, padB, padL, padR = createPadBox(), createPadBox(), createPadBox(), createPadBox()
 
 createLabel("AUTO LAYOUT (GROW)", propertyPanel)
 local autoSizeContainer = Instance.new("Frame")
@@ -216,22 +238,32 @@ local function updatePanel()
 	textEditBox.Text = isText and selectedElement.Text or "---"
 	fontLabel.Visible = isText
 	fontSelectBtn.Visible = isText
+	txtColorLabel.Visible = isText
+	txtR.Visible, txtG.Visible, txtB.Visible = isText, isText, isText
+
 	if isText then
 		fontSelectBtn.Text = selectedElement.Font.Name
+		txtR.Text = tostring(math.floor(selectedElement.TextColor3.R * 255))
+		txtG.Text = tostring(math.floor(selectedElement.TextColor3.G * 255))
+		txtB.Text = tostring(math.floor(selectedElement.TextColor3.B * 255))
 	end
+
+	bgR.Text = tostring(math.floor(selectedElement.BackgroundColor3.R * 255))
+	bgG.Text = tostring(math.floor(selectedElement.BackgroundColor3.G * 255))
+	bgB.Text = tostring(math.floor(selectedElement.BackgroundColor3.B * 255))
 
 	local corner = selectedElement:FindFirstChildOfClass("UICorner")
 	cornerEditBox.Text = corner and tostring(corner.CornerRadius.Offset) or "0"
-
 	sizeX.Text = tostring(math.floor(selectedElement.AbsoluteSize.X))
 	sizeY.Text = tostring(math.floor(selectedElement.AbsoluteSize.Y))
 
 	local pad = selectedElement:FindFirstChildOfClass("UIPadding")
 	if pad then
-		padT.Text = tostring(pad.PaddingTop.Offset)
-		padB.Text = tostring(pad.PaddingBottom.Offset)
-		padL.Text = tostring(pad.PaddingLeft.Offset)
-		padR.Text = tostring(pad.PaddingRight.Offset)
+		padT.Text, padB.Text, padL.Text, padR.Text =
+			tostring(pad.PaddingTop.Offset),
+			tostring(pad.PaddingBottom.Offset),
+			tostring(pad.PaddingLeft.Offset),
+			tostring(pad.PaddingRight.Offset)
 	else
 		padT.Text, padB.Text, padL.Text, padR.Text = "0", "0", "0", "0"
 	end
@@ -255,6 +287,23 @@ end
 
 -- --- 反映イベント ---
 
+local function applyColors()
+	if selectedElement then
+		selectedElement.BackgroundColor3 =
+			Color3.fromRGB(tonumber(bgR.Text) or 255, tonumber(bgG.Text) or 255, tonumber(bgB.Text) or 255)
+		if selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton") then
+			selectedElement.TextColor3 =
+				Color3.fromRGB(tonumber(txtR.Text) or 0, tonumber(txtG.Text) or 0, tonumber(txtB.Text) or 0)
+		end
+	end
+end
+bgR.FocusLost:Connect(applyColors)
+bgG.FocusLost:Connect(applyColors)
+bgB.FocusLost:Connect(applyColors)
+txtR.FocusLost:Connect(applyColors)
+txtG.FocusLost:Connect(applyColors)
+txtB.FocusLost:Connect(applyColors)
+
 textEditBox.FocusLost:Connect(function()
 	if selectedElement and (selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")) then
 		selectedElement.Text = textEditBox.Text
@@ -263,7 +312,6 @@ textEditBox.FocusLost:Connect(function()
 	end
 end)
 
--- ★ フォント切り替えロジック
 fontSelectBtn.MouseButton1Click:Connect(function()
 	if selectedElement and (selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")) then
 		local currentFont = selectedElement.Font
@@ -289,8 +337,9 @@ end)
 
 local function applySize()
 	if selectedElement then
-		local nx = tonumber(sizeX.Text) or selectedElement.AbsoluteSize.X
-		local ny = tonumber(sizeY.Text) or selectedElement.AbsoluteSize.Y
+		local nx, ny =
+			tonumber(sizeX.Text) or selectedElement.AbsoluteSize.X,
+			tonumber(sizeY.Text) or selectedElement.AbsoluteSize.Y
 		selectedElement.AutomaticSize = Enum.AutomaticSize.None
 		selectedElement.Size = UDim2.new(0, nx, 0, ny)
 		task.wait(0.05)
@@ -378,11 +427,10 @@ local function makeDraggable(guiObject)
 	canvasArea.InputChanged:Connect(function(input)
 		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
 			local delta = input.Position - dragStart
-			local parentSize = canvasArea.AbsoluteSize
 			guiObject.Position = UDim2.new(
-				startPos.X.Scale + (delta.X / parentSize.X),
+				startPos.X.Scale + (delta.X / canvasArea.AbsoluteSize.X),
 				0,
-				startPos.Y.Scale + (delta.Y / parentSize.Y),
+				startPos.Y.Scale + (delta.Y / canvasArea.AbsoluteSize.Y),
 				0
 			)
 			updatePanel()
@@ -393,8 +441,7 @@ end
 local function addElementToCanvas(className)
 	local newPart = Instance.new(className)
 	newPart.Active, newPart.Selectable = true, true
-	newPart.Size = UDim2.new(0, 150, 0, 50)
-	newPart.Position = UDim2.new(0.1, 0, 0.1, 0)
+	newPart.Size, newPart.Position = UDim2.new(0, 150, 0, 50), UDim2.new(0.1, 0, 0.1, 0)
 
 	if className ~= "Frame" then
 		newPart.Text = "New Element"
