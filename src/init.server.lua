@@ -133,7 +133,7 @@ local function fromHex(hex)
 	return nil
 end
 
--- --- 背景構築 ---
+-- --- 背景とトップバー構築 ---
 local background = Instance.new("Frame")
 background.Size = UDim2.new(1, 0, 1, 0)
 background.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -147,9 +147,9 @@ topBar.Parent = background
 
 local topLayout = Instance.new("UIListLayout", topBar)
 topLayout.FillDirection = Enum.FillDirection.Horizontal
-topLayout.Padding = UDim.new(0, 8)
+topLayout.Padding = UDim.new(0, 6)
 topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-Instance.new("UIPadding", topBar).PaddingLeft = UDim.new(0, 15)
+Instance.new("UIPadding", topBar).PaddingLeft = UDim.new(0, 12)
 
 local function createToolButton(text, color, width)
 	local btn = Instance.new("TextButton", topBar)
@@ -163,16 +163,20 @@ local function createToolButton(text, color, width)
 	return btn
 end
 
-local btnFrame = createToolButton("＋ 四角形", Color3.fromRGB(0, 120, 215))
-local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113))
-local btnButton = createToolButton("＋ ボタン", Color3.fromRGB(155, 89, 182))
-local btnDuplicate = createToolButton("👯 複製", Color3.fromRGB(80, 80, 80), 80)
-local btnDelete = createToolButton("🗑️ 削除", Color3.fromRGB(231, 76, 60), 80)
+-- ★ UIがはみ出さないようにボタン幅を最適化
+local btnFrame = createToolButton("＋ 四角", Color3.fromRGB(0, 120, 215), 70)
+local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113), 70)
+local btnButton = createToolButton("＋ Btn", Color3.fromRGB(155, 89, 182), 65)
 
-local btnUndo = createToolButton("↩️ Undo", Color3.fromRGB(60, 60, 60), 75)
-local btnRedo = createToolButton("↪️ Redo", Color3.fromRGB(60, 60, 60), 75)
+-- ★ 新機能：スナップボタントグル
+local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 75)
 
-local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34))
+local btnDuplicate = createToolButton("👯", Color3.fromRGB(80, 80, 80), 35)
+local btnDelete = createToolButton("🗑️", Color3.fromRGB(231, 76, 60), 35)
+local btnUndo = createToolButton("↩️", Color3.fromRGB(60, 60, 60), 35)
+local btnRedo = createToolButton("↪️", Color3.fromRGB(60, 60, 60), 35)
+
+local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34), 70)
 
 local mainArea = Instance.new("Frame", background)
 mainArea.Size = UDim2.new(1, 0, 1, -50)
@@ -309,6 +313,88 @@ local function createAutoBtn(text, pos)
 end
 local btnNone, btnX, btnY, btnXY =
 	createAutoBtn("OFF", 0), createAutoBtn("↔ X", 0.25), createAutoBtn("↕ Y", 0.5), createAutoBtn("↔↕ XY", 0.75)
+
+-- ==========================================
+-- ★ スナップ管理 ★
+-- ==========================================
+local snapSizes = { 1, 5, 10, 20 }
+local currentSnapIndex = 3 -- 初期は10px
+local snapSize = snapSizes[currentSnapIndex]
+
+btnSnap.MouseButton1Click:Connect(function()
+	currentSnapIndex = currentSnapIndex + 1
+	if currentSnapIndex > #snapSizes then
+		currentSnapIndex = 1
+	end
+	snapSize = snapSizes[currentSnapIndex]
+	if snapSize == 1 then
+		btnSnap.Text = "🧲 OFF"
+		btnSnap.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	else
+		btnSnap.Text = "🧲 " .. snapSize .. "px"
+		btnSnap.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
+	end
+end)
+
+-- ==========================================
+-- ★ ヒストリーエンジン (Undo/Redo) ★
+-- ==========================================
+local historyStack = {}
+local historyIndex = 0
+local maxHistory = 50
+
+function saveState()
+	for i = #historyStack, historyIndex + 1, -1 do
+		historyStack[i] = nil
+	end
+	local state = {}
+	for _, child in ipairs(canvasArea:GetChildren()) do
+		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
+			table.insert(state, child:Clone())
+		end
+	end
+	table.insert(historyStack, state)
+	if #historyStack > maxHistory then
+		table.remove(historyStack, 1)
+	else
+		historyIndex = historyIndex + 1
+	end
+end
+
+local function loadState(index)
+	if index < 1 or index > #historyStack then
+		return
+	end
+	for _, child in ipairs(canvasArea:GetChildren()) do
+		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
+			child:Destroy()
+		end
+	end
+	local state = historyStack[index]
+	for _, savedChild in ipairs(state) do
+		local clone = savedChild:Clone()
+		clone.Parent = canvasArea
+	end
+	if _G.selectElement then
+		_G.selectElement(nil)
+	end
+end
+
+local function undoState()
+	if historyIndex > 1 then
+		historyIndex = historyIndex - 1
+		loadState(historyIndex)
+	end
+end
+local function redoState()
+	if historyIndex < #historyStack then
+		historyIndex = historyIndex + 1
+		loadState(historyIndex)
+	end
+end
+
+btnUndo.MouseButton1Click:Connect(undoState)
+btnRedo.MouseButton1Click:Connect(redoState)
 
 -- ==========================================
 -- ★ 60fps カラーピッカー ★
@@ -537,70 +623,10 @@ confirmBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- ★ ヒストリーエンジン (Undo/Redo) ★
--- ==========================================
-local historyStack = {}
-local historyIndex = 0
-local maxHistory = 50
-
-function saveState() -- グローバルで呼べるようにlocal外す
-	for i = #historyStack, historyIndex + 1, -1 do
-		historyStack[i] = nil
-	end
-
-	local state = {}
-	for _, child in ipairs(canvasArea:GetChildren()) do
-		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
-			table.insert(state, child:Clone())
-		end
-	end
-
-	table.insert(historyStack, state)
-	if #historyStack > maxHistory then
-		table.remove(historyStack, 1)
-	else
-		historyIndex = historyIndex + 1
-	end
-end
-
-local function loadState(index)
-	if index < 1 or index > #historyStack then
-		return
-	end
-	for _, child in ipairs(canvasArea:GetChildren()) do
-		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
-			child:Destroy()
-		end
-	end
-	local state = historyStack[index]
-	for _, savedChild in ipairs(state) do
-		local clone = savedChild:Clone()
-		clone.Parent = canvasArea
-	end
-	selectElement(nil) -- ロード時は選択解除
-end
-
-local function undoState()
-	if historyIndex > 1 then
-		historyIndex = historyIndex - 1
-		loadState(historyIndex)
-	end
-end
-local function redoState()
-	if historyIndex < #historyStack then
-		historyIndex = historyIndex + 1
-		loadState(historyIndex)
-	end
-end
-
-btnUndo.MouseButton1Click:Connect(undoState)
-btnRedo.MouseButton1Click:Connect(redoState)
-
--- ==========================================
--- ★ 独立したハイライト枠と【新機能：リサイズハンドル】の構築 ★
+-- ★ ハイライト枠と【リサイズハンドル (スナップ連動)】の構築 ★
 -- ==========================================
 local selectedElement = nil
-local isResizing = false -- リサイズ中かどうかを判定するバリア
+local isResizing = false
 
 local selectionHighlight = Instance.new("Frame")
 selectionHighlight.Name = "SelectionHighlight"
@@ -615,7 +641,6 @@ shStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 local shCorner = Instance.new("UICorner", selectionHighlight)
 
--- 8方向のリサイズハンドルを作成
 local resizeHandles = {}
 local handleDirs = {
 	TopLeft = { x = -1, y = -1 },
@@ -636,14 +661,13 @@ for name, dir in pairs(handleDirs) do
 	handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	handle.Text = ""
 	handle.AutoButtonColor = false
-	handle.ZIndex = 10000 -- ハイライト枠よりさらに手前
-	handle.Active = true -- クリックをここで吸収する！
+	handle.ZIndex = 10000
+	handle.Active = true
 
 	local hStroke = Instance.new("UIStroke", handle)
 	hStroke.Color = Color3.fromRGB(0, 120, 215)
 	hStroke.Thickness = 1
 
-	-- 位置の割り当て
 	if name == "TopLeft" then
 		handle.Position = UDim2.new(0, 0, 0, 0)
 	elseif name == "Top" then
@@ -666,7 +690,6 @@ for name, dir in pairs(handleDirs) do
 	resizeHandles[name] = { btn = handle, dir = dir }
 end
 
--- リサイズ実行ロジック
 local resizeLoopConn = nil
 for name, data in pairs(resizeHandles) do
 	data.btn.InputBegan:Connect(function(input)
@@ -675,7 +698,7 @@ for name, data in pairs(resizeHandles) do
 				return
 			end
 
-			isResizing = true -- ドラッグを無効化するバリア展開
+			isResizing = true
 			local startMouse = widget:GetRelativeMousePosition()
 			local startSize = selectedElement.Size
 			local startPos = selectedElement.Position
@@ -696,48 +719,46 @@ for name, data in pairs(resizeHandles) do
 					local newPosX = startPos.X.Offset
 					local newPosY = startPos.Y.Offset
 
-					-- X方向の計算
+					-- ★ リサイズ時もグリッドに絶対座標でスナップさせる計算
 					if dir.x == 1 then
-						newSizeX = math.max(10, startSize.X.Offset + deltaX)
+						local targetEdgeX = startPos.X.Offset + startSize.X.Offset + deltaX
+						local snappedEdgeX = math.floor(targetEdgeX / snapSize + 0.5) * snapSize
+						newSizeX = math.max(10, snappedEdgeX - startPos.X.Offset)
 					elseif dir.x == -1 then
-						local maxDeltaX = startSize.X.Offset - 10
-						local actualDeltaX = math.min(deltaX, maxDeltaX)
-						newSizeX = startSize.X.Offset - actualDeltaX
-						newPosX = startPos.X.Offset + actualDeltaX
+						local targetEdgeX = startPos.X.Offset + deltaX
+						local snappedEdgeX = math.floor(targetEdgeX / snapSize + 0.5) * snapSize
+						newSizeX = math.max(10, startPos.X.Offset + startSize.X.Offset - snappedEdgeX)
+						newPosX = startPos.X.Offset + startSize.X.Offset - newSizeX
 					end
 
-					-- Y方向の計算
 					if dir.y == 1 then
-						newSizeY = math.max(10, startSize.Y.Offset + deltaY)
+						local targetEdgeY = startPos.Y.Offset + startSize.Y.Offset + deltaY
+						local snappedEdgeY = math.floor(targetEdgeY / snapSize + 0.5) * snapSize
+						newSizeY = math.max(10, snappedEdgeY - startPos.Y.Offset)
 					elseif dir.y == -1 then
-						local maxDeltaY = startSize.Y.Offset - 10
-						local actualDeltaY = math.min(deltaY, maxDeltaY)
-						newSizeY = startSize.Y.Offset - actualDeltaY
-						newPosY = startPos.Y.Offset + actualDeltaY
+						local targetEdgeY = startPos.Y.Offset + deltaY
+						local snappedEdgeY = math.floor(targetEdgeY / snapSize + 0.5) * snapSize
+						newSizeY = math.max(10, startPos.Y.Offset + startSize.Y.Offset - snappedEdgeY)
+						newPosY = startPos.Y.Offset + startSize.Y.Offset - newSizeY
 					end
 
-					-- 適用
 					selectedElement.Size = UDim2.new(startSize.X.Scale, newSizeX, startSize.Y.Scale, newSizeY)
 					selectedElement.Position = UDim2.new(startPos.X.Scale, newPosX, startPos.Y.Scale, newPosY)
 
-					-- ハイライト枠も即座に追従させる
 					selectionHighlight.Size = UDim2.new(0, newSizeX, 0, newSizeY)
 					selectionHighlight.Position = UDim2.new(startPos.X.Scale, newPosX, startPos.Y.Scale, newPosY)
 
-					-- プロパティパネルの数値もリアルタイム更新
-					if sizeX and sizeY then
-						sizeX.Text = tostring(math.floor(newSizeX))
-						sizeY.Text = tostring(math.floor(newSizeY))
+					if _G.updatePanelVisuals then
+						_G.updatePanelVisuals(newSizeX, newSizeY)
 					end
 				end
 			end)
 
-			-- マウスを離した時の処理
 			local endConn
 			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					if isResizing and selectedElement and selectedElement.Size ~= startSize then
-						saveState() -- サイズ変更が確定したら履歴に保存
+						saveState()
 					end
 					isResizing = false
 					if resizeLoopConn then
@@ -750,9 +771,7 @@ for name, data in pairs(resizeHandles) do
 	end)
 end
 
--- 普段のハイライト枠追従
 RunService.Heartbeat:Connect(function()
-	-- リサイズ中以外は自動で要素に追従
 	if selectedElement and selectionHighlight.Parent == canvasArea and not isResizing then
 		selectionHighlight.Size = UDim2.new(0, selectedElement.AbsoluteSize.X, 0, selectedElement.AbsoluteSize.Y)
 		selectionHighlight.Position = selectedElement.Position
@@ -761,16 +780,7 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- --- システムロジック ---
-local availableFonts = {
-	Enum.Font.Gotham,
-	Enum.Font.GothamBold,
-	Enum.Font.FredokaOne,
-	Enum.Font.LuckiestGuy,
-	Enum.Font.Roboto,
-	Enum.Font.Arcade,
-}
-
+-- --- プロパティパネル管理 ---
 local allBlocks = {
 	blockText,
 	blockFont,
@@ -787,7 +797,14 @@ local allBlocks = {
 	blockAuto,
 }
 
-function updatePanel() -- グローバル化
+function _G.updatePanelVisuals(sx, sy)
+	if sizeX and sizeY then
+		sizeX.Text = tostring(math.floor(sx))
+		sizeY.Text = tostring(math.floor(sy))
+	end
+end
+
+local function updatePanel()
 	if not selectedElement or not selectedElement.Parent then
 		selectionHighlight.Parent = nil
 		propTitle.Text = "No Selection"
@@ -835,11 +852,12 @@ function updatePanel() -- グローバル化
 	cornerEditBox.Text = selectedElement:FindFirstChildOfClass("UICorner")
 			and tostring(selectedElement:FindFirstChildOfClass("UICorner").CornerRadius.Offset)
 		or "0"
-	-- リサイズ中以外は数値を更新（リサイズ中は上で更新しているため競合を防ぐ）
+
 	if not isResizing then
 		sizeX.Text, sizeY.Text =
 			tostring(math.floor(selectedElement.AbsoluteSize.X)), tostring(math.floor(selectedElement.AbsoluteSize.Y))
 	end
+
 	local pad = selectedElement:FindFirstChildOfClass("UIPadding")
 	if pad then
 		padT.Text, padB.Text, padL.Text, padR.Text =
@@ -862,13 +880,13 @@ function updatePanel() -- グローバル化
 		or Color3.fromRGB(50, 50, 50)
 end
 
-function selectElement(element)
+function _G.selectElement(element)
 	selectedElement = element
 	updatePanel()
 end
 
 -- ==========================================
--- ★ ガラス板による完全ドラッグ管理 ★
+-- ★ ガラス板ドラッグ (スナップ対応版) ★
 -- ==========================================
 local clickCatcher = Instance.new("TextButton")
 clickCatcher.Name = "ClickCatcher"
@@ -878,18 +896,9 @@ clickCatcher.Text = ""
 clickCatcher.ZIndex = 9998
 clickCatcher.Parent = canvasArea
 
-local draggingElement = nil
-local dragStartMouseWidget = nil
-local dragStartOffset = nil
-local dragLoopConn = nil
-
 clickCatcher.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		if pickerBlocker.Visible then
-			return
-		end
-		-- ★ リサイズハンドルをつまんでいる最中はドラッグ処理を無効化！
-		if isResizing then
+		if pickerBlocker.Visible or isResizing then
 			return
 		end
 
@@ -919,7 +928,7 @@ clickCatcher.InputBegan:Connect(function(input)
 		end
 
 		if topElement then
-			selectElement(topElement)
+			_G.selectElement(topElement)
 			draggingElement = topElement
 			dragStartMouseWidget = widget:GetRelativeMousePosition()
 			dragStartOffset = topElement.Position
@@ -933,12 +942,14 @@ clickCatcher.InputBegan:Connect(function(input)
 					local deltaX = currentMouse.X - dragStartMouseWidget.X
 					local deltaY = currentMouse.Y - dragStartMouseWidget.Y
 
-					draggingElement.Position = UDim2.new(
-						dragStartOffset.X.Scale,
-						dragStartOffset.X.Offset + deltaX,
-						dragStartOffset.Y.Scale,
-						dragStartOffset.Y.Offset + deltaY
-					)
+					-- ★ ここでドラッグ移動にスナップを適用！
+					local rawX = dragStartOffset.X.Offset + deltaX
+					local rawY = dragStartOffset.Y.Offset + deltaY
+					local snappedX = math.floor(rawX / snapSize + 0.5) * snapSize
+					local snappedY = math.floor(rawY / snapSize + 0.5) * snapSize
+
+					draggingElement.Position =
+						UDim2.new(dragStartOffset.X.Scale, snappedX, dragStartOffset.Y.Scale, snappedY)
 					updatePanel()
 				end
 			end)
@@ -949,7 +960,6 @@ clickCatcher.InputBegan:Connect(function(input)
 					if draggingElement and draggingElement.Position ~= dragStartOffset then
 						saveState()
 					end
-
 					draggingElement = nil
 					if dragLoopConn then
 						dragLoopConn:Disconnect()
@@ -958,13 +968,13 @@ clickCatcher.InputBegan:Connect(function(input)
 				end
 			end)
 		else
-			selectElement(nil)
+			_G.selectElement(nil)
 		end
 	end
 end)
 
 -- ==========================================
--- ★ 削除・複製・プロパティ変更ロジック (保存連動) ★
+-- ★ 削除・複製・ショートカット ★
 -- ==========================================
 local function deleteSelected()
 	if selectedElement then
@@ -975,7 +985,6 @@ local function deleteSelected()
 		saveState()
 	end
 end
-
 local function duplicateSelected()
 	if selectedElement then
 		local clone = selectedElement:Clone()
@@ -987,11 +996,10 @@ local function duplicateSelected()
 			selectedElement.Position.Y.Offset + 15
 		)
 		clone.ZIndex = clone.ZIndex + 1
-		selectElement(clone)
+		_G.selectElement(clone)
 		saveState()
 	end
 end
-
 local function updateZIndexDirect()
 	if selectedElement then
 		selectedElement.ZIndex = tonumber(zIndexBox.Text) or selectedElement.ZIndex
@@ -1055,7 +1063,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- --- プロパティの反映 ＋ Undo保存 ---
+-- --- プロパティの反映 ---
 local function applyHexColors()
 	if selectedElement then
 		local newBg = fromHex(bgHex.Text)
@@ -1264,7 +1272,8 @@ end)
 local function addElementToCanvas(className)
 	local newPart = Instance.new(className)
 	newPart.Size = UDim2.new(0, 150, 0, 50)
-	newPart.Position = UDim2.new(0.1, 0, 0.1, 0)
+	-- ★ 新規作成時もキリの良い座標（50px）に配置するように変更
+	newPart.Position = UDim2.new(0, 50, 0, 50)
 	if className ~= "Frame" then
 		newPart.Text = "New Element"
 		newPart.BackgroundColor3 = className == "TextLabel" and Color3.fromRGB(255, 255, 255)
@@ -1297,7 +1306,7 @@ local function addElementToCanvas(className)
 	end
 	newPart.ZIndex = highestZ + 1
 
-	selectElement(newPart)
+	_G.selectElement(newPart)
 	saveState()
 end
 
