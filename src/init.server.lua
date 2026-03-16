@@ -3,7 +3,7 @@
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
--- ★ Mac対応：修飾キー（Cmd/Ctrl/Shift）を絶対に逃さないヘルパー関数
+-- ★ Mac対応：修飾キー
 local function isMultiSelectKey()
 	return UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
 		or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
@@ -31,7 +31,7 @@ end
 local toolbar = plugin:CreateToolbar("UI Builder Pro")
 local toggleButton = toolbar:CreateButton("Open Editor", "UI Builderを開く", "rbxassetid://4483345998")
 
-local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 950, 800, 750, 450)
+local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 1050, 800, 850, 450)
 local widget = plugin:CreateDockWidgetPluginGui("UIBuilderCanvas", widgetInfo)
 widget.Title = "UI Builder - Figma Pro"
 widget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -179,13 +179,17 @@ end
 local btnFrame = createToolButton("＋ 四角", Color3.fromRGB(0, 120, 215), 65)
 local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113), 65)
 local btnButton = createToolButton("＋ Btn", Color3.fromRGB(155, 89, 182), 60)
-local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 75)
-local btnGroup = createToolButton("📦 グループ", Color3.fromRGB(155, 89, 182), 80)
+local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 70)
+local btnGroup = createToolButton("📦 グループ", Color3.fromRGB(155, 89, 182), 75)
 local btnUngroup = createToolButton("💥 解除", Color3.fromRGB(155, 89, 182), 60)
 local btnDuplicate = createToolButton("👯", Color3.fromRGB(80, 80, 80), 30)
 local btnDelete = createToolButton("🗑️", Color3.fromRGB(231, 76, 60), 30)
 local btnUndo = createToolButton("↩️", Color3.fromRGB(60, 60, 60), 30)
 local btnRedo = createToolButton("↪️", Color3.fromRGB(60, 60, 60), 30)
+
+-- ★ 新機能：ズームリセットボタン
+local btnZoom = createToolButton("🔍 100%", Color3.fromRGB(60, 60, 60), 70)
+
 local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34), 65)
 
 local mainArea = Instance.new("Frame", background)
@@ -215,12 +219,26 @@ layerTitle.LayoutOrder = -1
 local UIPaddingLayer = Instance.new("UIPadding", layerTitle)
 UIPaddingLayer.PaddingLeft = UDim.new(0, 10)
 
+-- ==========================================
+-- ★ 新機能：キャンバス ＆ ワークスペース (Zoom/Pan用) ★
+-- ==========================================
 local canvasArea = Instance.new("Frame", mainArea)
 canvasArea.Size = UDim2.new(1, -460, 1, 0)
 canvasArea.Position = UDim2.new(0, 200, 0, 0)
 canvasArea.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 canvasArea.BorderSizePixel = 0
 canvasArea.ClipsDescendants = true
+
+-- ★ 要素を格納する透明なワークスペース（これが移動・拡大縮小される）
+local workspaceFrame = Instance.new("Frame", canvasArea)
+workspaceFrame.Name = "Workspace"
+workspaceFrame.Size = UDim2.new(0, 0, 0, 0)
+workspaceFrame.Position = UDim2.new(0, 0, 0, 0)
+workspaceFrame.BackgroundTransparency = 1
+
+local currentScale = 1
+local workspaceScale = Instance.new("UIScale", workspaceFrame)
+workspaceScale.Scale = currentScale
 
 local propertyPanel = Instance.new("ScrollingFrame", mainArea)
 propertyPanel.Size = UDim2.new(0, 260, 1, 0)
@@ -385,6 +403,60 @@ btnSnap.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
+-- ★ ZOOM & PAN コントロール ★
+-- ==========================================
+local isSpacePressed = false
+
+-- スペースキーの監視
+UserInputService.InputBegan:Connect(function(input, gp)
+	if input.KeyCode == Enum.KeyCode.Space and not UserInputService:GetFocusedTextBox() then
+		isSpacePressed = true
+	end
+end)
+UserInputService.InputEnded:Connect(function(input, gp)
+	if input.KeyCode == Enum.KeyCode.Space then
+		isSpacePressed = false
+	end
+end)
+
+-- ズームリセット
+btnZoom.MouseButton1Click:Connect(function()
+	currentScale = 1
+	workspaceScale.Scale = currentScale
+	workspaceFrame.Position = UDim2.new(0, 0, 0, 0)
+	btnZoom.Text = "🔍 100%"
+end)
+
+-- ズーム処理 (マウスホイール)
+canvasArea.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseWheel then
+		local oldScale = currentScale
+		-- ホイールの回転方向に応じて 10% ずつズーム
+		currentScale = math.clamp(currentScale + (input.Position.Z * 0.1 * currentScale), 0.1, 5)
+		workspaceScale.Scale = currentScale
+
+		-- ★ マウスカーソルの位置を中心にズームイン/アウトする計算
+		local mousePos = input.Position
+		local wx = workspaceFrame.AbsolutePosition.X
+		local wy = workspaceFrame.AbsolutePosition.Y
+
+		-- ズーム前のマウスのローカル座標
+		local rx = (mousePos.X - wx) / oldScale
+		local ry = (mousePos.Y - wy) / oldScale
+
+		-- 新しいスケールでのワークスペースの絶対座標を逆算
+		local newWx = mousePos.X - (rx * currentScale)
+		local newWy = mousePos.Y - (ry * currentScale)
+
+		-- ワークスペースの Position を更新 (CanvasAreaからの相対座標)
+		workspaceFrame.Position =
+			UDim2.new(0, newWx - canvasArea.AbsolutePosition.X, 0, newWy - canvasArea.AbsolutePosition.Y)
+
+		btnZoom.Text = "🔍 " .. math.floor(currentScale * 100) .. "%"
+	end
+end)
+
+-- ==========================================
 -- ★ ヒストリーエンジン (Undo/Redo) ★
 -- ==========================================
 local historyStack = {}
@@ -396,7 +468,7 @@ function saveState()
 		historyStack[i] = nil
 	end
 	local state = {}
-	for _, child in ipairs(canvasArea:GetChildren()) do
+	for _, child in ipairs(workspaceFrame:GetChildren()) do
 		if
 			child:IsA("GuiObject")
 			and not child.Name:match("Highlight")
@@ -421,7 +493,7 @@ local function loadState(index)
 	if index < 1 or index > #historyStack then
 		return
 	end
-	for _, child in ipairs(canvasArea:GetChildren()) do
+	for _, child in ipairs(workspaceFrame:GetChildren()) do
 		if
 			child:IsA("GuiObject")
 			and not child.Name:match("Highlight")
@@ -434,7 +506,7 @@ local function loadState(index)
 	local state = historyStack[index]
 	for _, savedChild in ipairs(state) do
 		local clone = savedChild:Clone()
-		clone.Parent = canvasArea
+		clone.Parent = workspaceFrame
 	end
 	if _G.clearSelection then
 		_G.clearSelection()
@@ -453,6 +525,7 @@ local function redoState()
 		loadState(historyIndex)
 	end
 end
+
 btnUndo.MouseButton1Click:Connect(undoState)
 btnRedo.MouseButton1Click:Connect(redoState)
 
@@ -675,20 +748,21 @@ confirmBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- ★ 複数選択・ハイライト管理 ★
+-- ★ 複数選択・ハイライト管理 (Scale対応) ★
 -- ==========================================
 local selectedElements = {}
 local highlightFrames = {}
 local isResizing = false
 _G.isRenamingLayer = false
 
+-- ★ ハイライトも Workspace の中に入れることでズーム時に自動追従させる
 local selectionHighlight = Instance.new("Frame")
 selectionHighlight.Name = "SelectionHighlight"
 selectionHighlight.BackgroundTransparency = 1
 selectionHighlight.Active = false
 selectionHighlight.ZIndex = 9999
 selectionHighlight.Visible = false
-selectionHighlight.Parent = canvasArea
+selectionHighlight.Parent = workspaceFrame
 local shStroke = Instance.new("UIStroke", selectionHighlight)
 shStroke.Color = Color3.fromRGB(0, 162, 255)
 shStroke.Thickness = 2
@@ -755,33 +829,41 @@ function _G.refreshHighlights()
 		s.Thickness = 2
 		s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		local c = Instance.new("UICorner", hl)
-		hl.Parent = canvasArea
+		hl.Parent = workspaceFrame
 		table.insert(highlightFrames, { frame = hl, target = el, corner = c })
 	end
 end
 
 RunService.Heartbeat:Connect(function()
-	local canvasAbsPos = canvasArea.AbsolutePosition
+	local workspaceAbsPos = workspaceFrame.AbsolutePosition
 	for _, hd in ipairs(highlightFrames) do
 		if hd.target and hd.target.Parent then
-			hd.frame.Size = UDim2.new(0, hd.target.AbsoluteSize.X, 0, hd.target.AbsoluteSize.Y)
+			-- スケール適用前のローカル座標に変換して追従
+			hd.frame.Size =
+				UDim2.new(0, hd.target.AbsoluteSize.X / currentScale, 0, hd.target.AbsoluteSize.Y / currentScale)
 			hd.frame.Position = UDim2.new(
 				0,
-				hd.target.AbsolutePosition.X - canvasAbsPos.X,
+				(hd.target.AbsolutePosition.X - workspaceAbsPos.X) / currentScale,
 				0,
-				hd.target.AbsolutePosition.Y - canvasAbsPos.Y
+				(hd.target.AbsolutePosition.Y - workspaceAbsPos.Y) / currentScale
 			)
 			local c = hd.target:FindFirstChildOfClass("UICorner")
 			hd.corner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
 		end
 	end
+
 	if #selectedElements == 1 then
 		local target = selectedElements[1]
 		selectionHighlight.Visible = true
 		if not isResizing then
-			selectionHighlight.Size = UDim2.new(0, target.AbsoluteSize.X, 0, target.AbsoluteSize.Y)
-			selectionHighlight.Position =
-				UDim2.new(0, target.AbsolutePosition.X - canvasAbsPos.X, 0, target.AbsolutePosition.Y - canvasAbsPos.Y)
+			selectionHighlight.Size =
+				UDim2.new(0, target.AbsoluteSize.X / currentScale, 0, target.AbsoluteSize.Y / currentScale)
+			selectionHighlight.Position = UDim2.new(
+				0,
+				(target.AbsolutePosition.X - workspaceAbsPos.X) / currentScale,
+				0,
+				(target.AbsolutePosition.Y - workspaceAbsPos.Y) / currentScale
+			)
 			local c = target:FindFirstChildOfClass("UICorner")
 			shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
 		end
@@ -809,8 +891,9 @@ for name, data in pairs(resizeHandles) do
 			resizeLoopConn = RunService.Heartbeat:Connect(function()
 				if isResizing and targetElement then
 					local currentMouse = widget:GetRelativeMousePosition()
-					local deltaX = currentMouse.X - startMouse.X
-					local deltaY = currentMouse.Y - startMouse.Y
+					-- ★ マウス移動量もスケールで割って、正しいローカルサイズを計算する！
+					local deltaX = (currentMouse.X - startMouse.X) / currentScale
+					local deltaY = (currentMouse.Y - startMouse.Y) / currentScale
 					local newSizeX = startSize.X.Offset
 					local newSizeY = startSize.Y.Offset
 					local newPosX = startPos.X.Offset
@@ -839,13 +922,17 @@ for name, data in pairs(resizeHandles) do
 
 					targetElement.Size = UDim2.new(startSize.X.Scale, newSizeX, startSize.Y.Scale, newSizeY)
 					targetElement.Position = UDim2.new(startPos.X.Scale, newPosX, startPos.Y.Scale, newPosY)
-					selectionHighlight.Size =
-						UDim2.new(0, targetElement.AbsoluteSize.X, 0, targetElement.AbsoluteSize.Y)
+					selectionHighlight.Size = UDim2.new(
+						0,
+						targetElement.AbsoluteSize.X / currentScale,
+						0,
+						targetElement.AbsoluteSize.Y / currentScale
+					)
 					selectionHighlight.Position = UDim2.new(
 						0,
-						targetElement.AbsolutePosition.X - canvasArea.AbsolutePosition.X,
+						(targetElement.AbsolutePosition.X - workspaceFrame.AbsolutePosition.X) / currentScale,
 						0,
-						targetElement.AbsolutePosition.Y - canvasArea.AbsolutePosition.Y
+						(targetElement.AbsolutePosition.Y - workspaceFrame.AbsolutePosition.Y) / currentScale
 					)
 					if _G.updatePanelVisuals then
 						_G.updatePanelVisuals(newSizeX, newSizeY)
@@ -939,7 +1026,6 @@ function _G.updateLayerPanel()
 		clickBtn.ZIndex = 2
 		local lastClick = 0
 		clickBtn.InputBegan:Connect(function(input)
-			-- ★ Macの Cmd+クリック は MouseButton2 になるため両方許可！
 			if
 				input.UserInputType == Enum.UserInputType.MouseButton1
 				or input.UserInputType == Enum.UserInputType.MouseButton2
@@ -985,7 +1071,7 @@ function _G.updateLayerPanel()
 	end
 
 	local rootElements = {}
-	for _, c in ipairs(canvasArea:GetChildren()) do
+	for _, c in ipairs(workspaceFrame:GetChildren()) do
 		if
 			c:IsA("GuiObject")
 			and not c.Name:match("Highlight")
@@ -1126,15 +1212,15 @@ local function alignElements(mode)
 	end
 	local targetMinX, targetMinY = math.huge, math.huge
 	local targetMaxX, targetMaxY = -math.huge, -math.huge
-	local canvasAbsPos = canvasArea.AbsolutePosition
+	local workspaceAbsPos = workspaceFrame.AbsolutePosition
 	if #selectedElements == 1 then
 		targetMinX, targetMinY = 0, 0
-		targetMaxX, targetMaxY = canvasArea.AbsoluteSize.X, canvasArea.AbsoluteSize.Y
+		targetMaxX, targetMaxY = canvasArea.AbsoluteSize.X / currentScale, canvasArea.AbsoluteSize.Y / currentScale
 	else
 		for _, el in ipairs(selectedElements) do
-			local ex = el.AbsolutePosition.X - canvasAbsPos.X
-			local ey = el.AbsolutePosition.Y - canvasAbsPos.Y
-			local ew, eh = el.AbsoluteSize.X, el.AbsoluteSize.Y
+			local ex = (el.AbsolutePosition.X - workspaceAbsPos.X) / currentScale
+			local ey = (el.AbsolutePosition.Y - workspaceAbsPos.Y) / currentScale
+			local ew, eh = el.AbsoluteSize.X / currentScale, el.AbsoluteSize.Y / currentScale
 			targetMinX = math.min(targetMinX, ex)
 			targetMinY = math.min(targetMinY, ey)
 			targetMaxX = math.max(targetMaxX, ex + ew)
@@ -1142,9 +1228,9 @@ local function alignElements(mode)
 		end
 	end
 	for _, el in ipairs(selectedElements) do
-		local ew, eh = el.AbsoluteSize.X, el.AbsoluteSize.Y
-		local currentAbsX = el.AbsolutePosition.X - canvasAbsPos.X
-		local currentAbsY = el.AbsolutePosition.Y - canvasAbsPos.Y
+		local ew, eh = el.AbsoluteSize.X / currentScale, el.AbsoluteSize.Y / currentScale
+		local currentAbsX = (el.AbsolutePosition.X - workspaceAbsPos.X) / currentScale
+		local currentAbsY = (el.AbsolutePosition.Y - workspaceAbsPos.Y) / currentScale
 		local newX, newY = currentAbsX, currentAbsY
 		if mode == "Left" then
 			newX = targetMinX
@@ -1196,7 +1282,7 @@ local function groupSelected()
 	end
 	local minX, minY = math.huge, math.huge
 	local maxX, maxY = -math.huge, -math.huge
-	local canvasAbsPos = canvasArea.AbsolutePosition
+	local workspaceAbsPos = workspaceFrame.AbsolutePosition
 	for _, el in ipairs(selectedElements) do
 		local ax, ay = el.AbsolutePosition.X, el.AbsolutePosition.Y
 		local sx, sy = el.AbsoluteSize.X, el.AbsoluteSize.Y
@@ -1209,10 +1295,11 @@ local function groupSelected()
 	local groupFrame = Instance.new("Frame")
 	groupFrame.Name = "Group " .. elementCount
 	groupFrame.BackgroundTransparency = 1
-	groupFrame.Position = UDim2.new(0, minX - canvasAbsPos.X, 0, minY - canvasAbsPos.Y)
-	groupFrame.Size = UDim2.new(0, maxX - minX, 0, maxY - minY)
+	groupFrame.Position =
+		UDim2.new(0, (minX - workspaceAbsPos.X) / currentScale, 0, (minY - workspaceAbsPos.Y) / currentScale)
+	groupFrame.Size = UDim2.new(0, (maxX - minX) / currentScale, 0, (maxY - minY) / currentScale)
 	local highestZ = 0
-	for _, child in ipairs(canvasArea:GetChildren()) do
+	for _, child in ipairs(workspaceFrame:GetChildren()) do
 		if
 			child:IsA("GuiObject")
 			and not child.Name:match("Highlight")
@@ -1225,9 +1312,14 @@ local function groupSelected()
 		end
 	end
 	groupFrame.ZIndex = highestZ + 1
-	groupFrame.Parent = canvasArea
+	groupFrame.Parent = workspaceFrame
 	for _, el in ipairs(selectedElements) do
-		el.Position = UDim2.new(0, el.AbsolutePosition.X - minX, 0, el.AbsolutePosition.Y - minY)
+		el.Position = UDim2.new(
+			0,
+			(el.AbsolutePosition.X - minX) / currentScale,
+			0,
+			(el.AbsolutePosition.Y - minY) / currentScale
+		)
 		el.Parent = groupFrame
 	end
 	_G.selectElement(groupFrame)
@@ -1240,7 +1332,7 @@ local function ungroupSelected()
 	end
 	local newSelection = {}
 	local changed = false
-	local canvasAbsPos = canvasArea.AbsolutePosition
+	local workspaceAbsPos = workspaceFrame.AbsolutePosition
 	for _, group in ipairs(selectedElements) do
 		if group:IsA("Frame") and group.Name:match("Group") then
 			local children = group:GetChildren()
@@ -1250,11 +1342,11 @@ local function ungroupSelected()
 					hasMovableChildren = true
 					child.Position = UDim2.new(
 						0,
-						child.AbsolutePosition.X - canvasAbsPos.X,
+						(child.AbsolutePosition.X - workspaceAbsPos.X) / currentScale,
 						0,
-						child.AbsolutePosition.Y - canvasAbsPos.Y
+						(child.AbsolutePosition.Y - workspaceAbsPos.Y) / currentScale
 					)
-					child.Parent = canvasArea
+					child.Parent = workspaceFrame
 					child.ZIndex = group.ZIndex
 					table.insert(newSelection, child)
 					changed = true
@@ -1280,7 +1372,7 @@ btnGroup.MouseButton1Click:Connect(groupSelected)
 btnUngroup.MouseButton1Click:Connect(ungroupSelected)
 
 -- ==========================================
--- ★ ドリルダウン選択 (ダブルクリック) と ドラッグ管理 ★
+-- ★ パン・ドリルダウン・ドラッグ管理 ★
 -- ==========================================
 local clickCatcher = Instance.new("TextButton")
 clickCatcher.Name = "ClickCatcher"
@@ -1302,6 +1394,7 @@ marqueeBox.Parent = canvasArea
 local dragLoopConn = nil
 local lastClickTime = 0
 local lastClickPos = Vector2.new()
+local isPanning = false
 
 local function findHitElement(elementsList, mousePos)
 	local topElement = nil
@@ -1334,15 +1427,49 @@ local function findHitElement(elementsList, mousePos)
 end
 
 clickCatcher.InputBegan:Connect(function(input)
-	-- ★ Macの Cmd+クリック は MouseButton2 になるため両方許可！
+	if pickerBlocker.Visible or isResizing then
+		return
+	end
+
+	-- ★ パン（移動）判定: 中ボタン または Space+左クリック
+	if
+		input.UserInputType == Enum.UserInputType.MouseButton3
+		or (input.UserInputType == Enum.UserInputType.MouseButton1 and isSpacePressed)
+	then
+		isPanning = true
+		local startMouseWidget = widget:GetRelativeMousePosition()
+		local startWsPos = workspaceFrame.Position
+
+		local panConn
+		panConn = RunService.Heartbeat:Connect(function()
+			if isPanning then
+				local currM = widget:GetRelativeMousePosition()
+				workspaceFrame.Position = UDim2.new(
+					0,
+					startWsPos.X.Offset + (currM.X - startMouseWidget.X),
+					0,
+					startWsPos.Y.Offset + (currM.Y - startMouseWidget.Y)
+				)
+			end
+		end)
+
+		local endConn
+		endConn = input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				isPanning = false
+				if panConn then
+					panConn:Disconnect()
+				end
+				endConn:Disconnect()
+			end
+		end)
+		return -- パン中は要素の選択処理を行わない
+	end
+
 	if
 		input.UserInputType == Enum.UserInputType.MouseButton1
 		or input.UserInputType == Enum.UserInputType.MouseButton2
 	then
-		if pickerBlocker.Visible or isResizing then
-			return
-		end
-
 		local mousePos = input.Position
 		local now = tick()
 		local isDoubleClick = (now - lastClickTime < 0.3)
@@ -1350,8 +1477,8 @@ clickCatcher.InputBegan:Connect(function(input)
 		lastClickTime = now
 		lastClickPos = Vector2.new(mousePos.X, mousePos.Y)
 
-		local targetRoots = canvasArea:GetChildren()
-		if #selectedElements == 1 and selectedElements[1].Parent ~= canvasArea then
+		local targetRoots = workspaceFrame:GetChildren()
+		if #selectedElements == 1 and selectedElements[1].Parent ~= workspaceFrame then
 			targetRoots = selectedElements[1].Parent:GetChildren()
 		end
 
@@ -1369,12 +1496,11 @@ clickCatcher.InputBegan:Connect(function(input)
 			end
 		end
 
-		if not topElement and targetRoots ~= canvasArea:GetChildren() then
-			topElement = findHitElement(canvasArea:GetChildren(), mousePos)
+		if not topElement and targetRoots ~= workspaceFrame:GetChildren() then
+			topElement = findHitElement(workspaceFrame:GetChildren(), mousePos)
 		end
 
 		if topElement then
-			-- ★ 確実に全モディファイアを判定
 			if isMultiSelectKey() then
 				local idx = table.find(selectedElements, topElement)
 				if idx then
@@ -1401,8 +1527,9 @@ clickCatcher.InputBegan:Connect(function(input)
 			dragLoopConn = RunService.Heartbeat:Connect(function()
 				if dragging then
 					local currentMouse = widget:GetRelativeMousePosition()
-					local deltaX = currentMouse.X - dragStartMouseWidget.X
-					local deltaY = currentMouse.Y - dragStartMouseWidget.Y
+					-- ★ マウスの移動量をスケールで割って正確なローカル移動量にする！
+					local deltaX = (currentMouse.X - dragStartMouseWidget.X) / currentScale
+					local deltaY = (currentMouse.Y - dragStartMouseWidget.Y) / currentScale
 					for _, el in ipairs(selectedElements) do
 						local startPos = startOffsets[el]
 						if startPos then
@@ -1440,11 +1567,9 @@ clickCatcher.InputBegan:Connect(function(input)
 				end
 			end)
 		else
-			-- もし修飾キーを押しながら何もないところをクリックしたら、選択解除しない
 			if not isMultiSelectKey() then
 				_G.clearSelection()
 			end
-
 			marqueeBox.Visible = true
 			local startMouseWidget = widget:GetRelativeMousePosition()
 			local canvasAbsPos = canvasArea.AbsolutePosition
@@ -1481,7 +1606,7 @@ clickCatcher.InputBegan:Connect(function(input)
 					local mRect =
 						Rect.new(marqueeBox.AbsolutePosition, marqueeBox.AbsolutePosition + marqueeBox.AbsoluteSize)
 					local newSelection = {}
-					for _, child in ipairs(canvasArea:GetChildren()) do
+					for _, child in ipairs(workspaceFrame:GetChildren()) do
 						if
 							child:IsA("GuiObject")
 							and not child.Name:match("Highlight")
@@ -1499,7 +1624,6 @@ clickCatcher.InputBegan:Connect(function(input)
 							end
 						end
 					end
-					-- ★ ドラッグ選択時もShift/Cmdが押されていれば追加、そうでなければ置き換え
 					if isMultiSelectKey() then
 						for _, el in ipairs(newSelection) do
 							if not table.find(selectedElements, el) then
@@ -1509,7 +1633,6 @@ clickCatcher.InputBegan:Connect(function(input)
 					else
 						selectedElements = newSelection
 					end
-
 					_G.refreshHighlights()
 					_G.updatePanel()
 				end
@@ -1589,7 +1712,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		return
 	end
 
-	-- ★ Macの Cmd/Ctrl/Shift 判定を確実に処理
 	local ctrlPressed = isCtrlOrCmd()
 	local shiftPressed = isShiftKey()
 
@@ -1853,7 +1975,16 @@ local function addElementToCanvas(className)
 	end
 
 	newPart.Size = UDim2.new(0, 150, 0, 50)
-	newPart.Position = UDim2.new(0, math.floor(50 / snapSize) * snapSize, 0, math.floor(50 / snapSize) * snapSize)
+
+	-- ★ ズーム中でも、画面の中央付近に生成されるように計算
+	local centerAbsX = canvasArea.AbsolutePosition.X + canvasArea.AbsoluteSize.X / 2
+	local centerAbsY = canvasArea.AbsolutePosition.Y + canvasArea.AbsoluteSize.Y / 2
+	local localX = (centerAbsX - workspaceFrame.AbsolutePosition.X) / currentScale
+	local localY = (centerAbsY - workspaceFrame.AbsolutePosition.Y) / currentScale
+
+	newPart.Position =
+		UDim2.new(0, math.floor(localX / snapSize) * snapSize, 0, math.floor(localY / snapSize) * snapSize)
+
 	if className ~= "Frame" then
 		newPart.Text = "New Element"
 		newPart.BackgroundColor3 = className == "TextLabel" and Color3.fromRGB(255, 255, 255)
@@ -1870,9 +2001,9 @@ local function addElementToCanvas(className)
 	s.Color = Color3.fromRGB(150, 150, 150)
 	s.Name = "DesignStroke"
 
-	newPart.Parent = canvasArea
+	newPart.Parent = workspaceFrame
 	local highestZ = 0
-	for _, child in ipairs(canvasArea:GetChildren()) do
+	for _, child in ipairs(workspaceFrame:GetChildren()) do
 		if
 			child:IsA("GuiObject")
 			and child ~= newPart
@@ -1906,7 +2037,7 @@ btnExport.MouseButton1Click:Connect(function()
 		or Instance.new("ScreenGui", game:GetService("StarterGui"))
 	exportGui.Name = "UIBuilderExport"
 	exportGui:ClearAllChildren()
-	for _, element in ipairs(canvasArea:GetChildren()) do
+	for _, element in ipairs(workspaceFrame:GetChildren()) do
 		if
 			element:IsA("GuiObject")
 			and not element.Name:match("Highlight")
