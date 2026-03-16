@@ -163,18 +163,22 @@ local function createToolButton(text, color, width)
 	return btn
 end
 
-local btnFrame = createToolButton("＋ 四角", Color3.fromRGB(0, 120, 215), 70)
-local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113), 70)
-local btnButton = createToolButton("＋ Btn", Color3.fromRGB(155, 89, 182), 65)
+local btnFrame = createToolButton("＋ 四角", Color3.fromRGB(0, 120, 215), 65)
+local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113), 65)
+local btnButton = createToolButton("＋ Btn", Color3.fromRGB(155, 89, 182), 60)
 
-local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 75)
+local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 65)
 
-local btnDuplicate = createToolButton("👯", Color3.fromRGB(80, 80, 80), 35)
-local btnDelete = createToolButton("🗑️", Color3.fromRGB(231, 76, 60), 35)
-local btnUndo = createToolButton("↩️", Color3.fromRGB(60, 60, 60), 35)
-local btnRedo = createToolButton("↪️", Color3.fromRGB(60, 60, 60), 35)
+-- ★ 新機能：グループ化ボタン
+local btnGroup = createToolButton("📦 グループ", Color3.fromRGB(155, 89, 182), 80)
+local btnUngroup = createToolButton("💥 解除", Color3.fromRGB(155, 89, 182), 60)
 
-local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34), 70)
+local btnDuplicate = createToolButton("👯", Color3.fromRGB(80, 80, 80), 30)
+local btnDelete = createToolButton("🗑️", Color3.fromRGB(231, 76, 60), 30)
+local btnUndo = createToolButton("↩️", Color3.fromRGB(60, 60, 60), 30)
+local btnRedo = createToolButton("↪️", Color3.fromRGB(60, 60, 60), 30)
+
+local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34), 65)
 
 local mainArea = Instance.new("Frame", background)
 mainArea.Size = UDim2.new(1, 0, 1, -50)
@@ -213,7 +217,7 @@ propTitle.TextXAlignment = Enum.TextXAlignment.Left
 propTitle.LayoutOrder = 0
 
 -- ==========================================
--- ★ 新機能：ALIGNMENT（自動整列ツール） ★
+-- ★ ALIGNMENT（自動整列ツール） ★
 -- ==========================================
 local blockAlign, areaAlign = createPropertyBlock("ALIGNMENT (ALIGN & DISTRIBUTE)", propertyPanel, 55)
 
@@ -236,7 +240,6 @@ alignRow1.BackgroundTransparency = 1
 local btnAlignLeft = createAlignBtn("左揃え", alignRow1, 0)
 local btnAlignCenterX = createAlignBtn("中央(横)", alignRow1, 0.345)
 local btnAlignRight = createAlignBtn("右揃え", alignRow1, 0.69)
-
 local alignRow2 = Instance.new("Frame", areaAlign)
 alignRow2.Size = UDim2.new(1, 0, 0, 24)
 alignRow2.Position = UDim2.new(0, 0, 0, 29)
@@ -662,7 +665,7 @@ confirmBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- ★ 新機能：複数選択（Multi-Selection）とハイライト管理 ★
+-- ★ 複数選択（Multi-Selection）とハイライト管理 ★
 -- ==========================================
 local selectedElements = {}
 local highlightFrames = {}
@@ -894,7 +897,7 @@ local function updatePanel()
 		for _, block in ipairs(allBlocks) do
 			block.Visible = false
 		end
-		blockAlign.Visible = true -- ★ 複数選択時も整列ツールは表示する！
+		blockAlign.Visible = true
 		return
 	end
 
@@ -972,30 +975,33 @@ function _G.clearSelection()
 	refreshHighlights()
 	updatePanel()
 end
+function _G.selectElement(element)
+	selectedElements = { element }
+	refreshHighlights()
+	updatePanel()
+end
 
 -- ==========================================
--- ★ 新機能：ALIGNMENT（自動整列の実行ロジック） ★
+-- ★ ALIGNMENT（自動整列の実行ロジック） ★
 -- ==========================================
 local function alignElements(mode)
 	if #selectedElements == 0 then
 		return
 	end
 
-	local targetMinX, targetMaxX, targetMinY, targetMaxY
-	local canvasWidth = canvasArea.AbsoluteSize.X
-	local canvasHeight = canvasArea.AbsoluteSize.Y
+	local targetMinX, targetMinY = math.huge, math.huge
+	local targetMaxX, targetMaxY = -math.huge, -math.huge
+	local canvasAbsPos = canvasArea.AbsolutePosition
 
-	-- 単一選択時はキャンバス全体を基準に整列
 	if #selectedElements == 1 then
 		targetMinX, targetMinY = 0, 0
-		targetMaxX, targetMaxY = canvasWidth, canvasHeight
+		targetMaxX, targetMaxY = canvasArea.AbsoluteSize.X, canvasArea.AbsoluteSize.Y
 	else
-		-- 複数選択時は選択された要素の「一番外側の枠（バウンディングボックス）」を基準に整列
-		targetMinX, targetMinY = math.huge, math.huge
-		targetMaxX, targetMaxY = -math.huge, -math.huge
+		-- 選択要素すべての絶対座標ベースでバウンディングボックスを計算
 		for _, el in ipairs(selectedElements) do
-			local ex, ey = el.Position.X.Offset, el.Position.Y.Offset
-			local ew, eh = el.Size.X.Offset, el.Size.Y.Offset
+			local ex = el.AbsolutePosition.X - canvasAbsPos.X
+			local ey = el.AbsolutePosition.Y - canvasAbsPos.Y
+			local ew, eh = el.AbsoluteSize.X, el.AbsoluteSize.Y
 			targetMinX = math.min(targetMinX, ex)
 			targetMinY = math.min(targetMinY, ey)
 			targetMaxX = math.max(targetMaxX, ex + ew)
@@ -1003,11 +1009,13 @@ local function alignElements(mode)
 		end
 	end
 
-	-- 一気に整列させる
 	for _, el in ipairs(selectedElements) do
-		local ew, eh = el.Size.X.Offset, el.Size.Y.Offset
-		local newX = el.Position.X.Offset
-		local newY = el.Position.Y.Offset
+		local ew, eh = el.AbsoluteSize.X, el.AbsoluteSize.Y
+		local currentAbsX = el.AbsolutePosition.X - canvasAbsPos.X
+		local currentAbsY = el.AbsolutePosition.Y - canvasAbsPos.Y
+
+		local newX = currentAbsX
+		local newY = currentAbsY
 
 		if mode == "Left" then
 			newX = targetMinX
@@ -1023,15 +1031,22 @@ local function alignElements(mode)
 			newY = targetMaxY - eh
 		end
 
-		-- 少数を切り捨ててピタッと配置
-		el.Position = UDim2.new(el.Position.X.Scale, math.floor(newX), el.Position.Y.Scale, math.floor(newY))
+		-- 親がGroupフレームなどでも正しく配置できるよう、AbsolutePositionの差分を使ってPositionを更新
+		local deltaX = newX - currentAbsX
+		local deltaY = newY - currentAbsY
+
+		el.Position = UDim2.new(
+			el.Position.X.Scale,
+			math.floor(el.Position.X.Offset + deltaX),
+			el.Position.Y.Scale,
+			math.floor(el.Position.Y.Offset + deltaY)
+		)
 	end
 
 	updatePanel()
 	saveState()
 end
 
--- 整列ボタンのイベント接続
 btnAlignLeft.MouseButton1Click:Connect(function()
 	alignElements("Left")
 end)
@@ -1050,6 +1065,113 @@ end)
 btnAlignBottom.MouseButton1Click:Connect(function()
 	alignElements("Bottom")
 end)
+
+-- ==========================================
+-- ★ 新機能：グループ化 (Grouping) ★
+-- ==========================================
+local function groupSelected()
+	if #selectedElements == 0 then
+		return
+	end
+
+	local minX, minY = math.huge, math.huge
+	local maxX, maxY = -math.huge, -math.huge
+	local canvasAbsPos = canvasArea.AbsolutePosition
+
+	-- 選択要素の絶対座標バウンディングボックスを計算
+	for _, el in ipairs(selectedElements) do
+		local ax, ay = el.AbsolutePosition.X, el.AbsolutePosition.Y
+		local sx, sy = el.AbsoluteSize.X, el.AbsoluteSize.Y
+		minX = math.min(minX, ax)
+		minY = math.min(minY, ay)
+		maxX = math.max(maxX, ax + sx)
+		maxY = math.max(maxY, ay + sy)
+	end
+
+	-- グループ用の透明フレームを作成
+	local groupFrame = Instance.new("Frame")
+	groupFrame.Name = "Group"
+	groupFrame.BackgroundTransparency = 1
+	groupFrame.Position = UDim2.new(0, minX - canvasAbsPos.X, 0, minY - canvasAbsPos.Y)
+	groupFrame.Size = UDim2.new(0, maxX - minX, 0, maxY - minY)
+
+	local highestZ = 0
+	for _, child in ipairs(canvasArea:GetChildren()) do
+		if
+			child:IsA("GuiObject")
+			and not child.Name:match("Highlight")
+			and child.Name ~= "ClickCatcher"
+			and child.Name ~= "MarqueeBox"
+		then
+			if child.ZIndex > highestZ then
+				highestZ = child.ZIndex
+			end
+		end
+	end
+	groupFrame.ZIndex = highestZ + 1
+	groupFrame.Parent = canvasArea
+
+	-- 要素をグループの中へ移動し、座標を再計算
+	for _, el in ipairs(selectedElements) do
+		el.Position = UDim2.new(0, el.AbsolutePosition.X - minX, 0, el.AbsolutePosition.Y - minY)
+		el.Parent = groupFrame
+	end
+
+	_G.selectElement(groupFrame)
+	saveState()
+end
+
+local function ungroupSelected()
+	if #selectedElements == 0 then
+		return
+	end
+
+	local newSelection = {}
+	local changed = false
+	local canvasAbsPos = canvasArea.AbsolutePosition
+
+	for _, group in ipairs(selectedElements) do
+		if group:IsA("Frame") then
+			local children = group:GetChildren()
+			local hasMovableChildren = false
+
+			for _, child in ipairs(children) do
+				if child:IsA("GuiObject") and not child.Name:match("Highlight") then
+					hasMovableChildren = true
+					-- 座標をキャンバス基準に戻す
+					child.Position = UDim2.new(
+						0,
+						child.AbsolutePosition.X - canvasAbsPos.X,
+						0,
+						child.AbsolutePosition.Y - canvasAbsPos.Y
+					)
+					child.Parent = canvasArea
+					child.ZIndex = group.ZIndex
+					table.insert(newSelection, child)
+					changed = true
+				end
+			end
+
+			if hasMovableChildren then
+				group:Destroy()
+			else
+				table.insert(newSelection, group)
+			end
+		else
+			table.insert(newSelection, group)
+		end
+	end
+
+	if changed then
+		selectedElements = newSelection
+		refreshHighlights()
+		updatePanel()
+		saveState()
+	end
+end
+
+btnGroup.MouseButton1Click:Connect(groupSelected)
+btnUngroup.MouseButton1Click:Connect(ungroupSelected)
 
 -- ==========================================
 -- ★ ドラッグ囲み選択 (Marquee) と 複数ドラッグ ★
@@ -1112,9 +1234,7 @@ clickCatcher.InputBegan:Connect(function(input)
 
 		if topElement then
 			if not table.find(selectedElements, topElement) then
-				selectedElements = { topElement }
-				refreshHighlights()
-				updatePanel()
+				_G.selectElement(topElement)
 			end
 
 			local dragStartMouseWidget = widget:GetRelativeMousePosition()
@@ -1172,9 +1292,7 @@ clickCatcher.InputBegan:Connect(function(input)
 				end
 			end)
 		else
-			selectedElements = {}
-			refreshHighlights()
-			updatePanel()
+			_G.clearSelection()
 
 			marqueeBox.Visible = true
 			local startMouseWidget = widget:GetRelativeMousePosition()
@@ -1334,6 +1452,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
 		or UserInputService:IsKeyDown(Enum.KeyCode.LeftSuper)
 		or UserInputService:IsKeyDown(Enum.KeyCode.RightSuper)
+	local shiftPressed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
 
 	if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Delete then
 		deleteSelected()
@@ -1344,8 +1464,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	elseif input.KeyCode == Enum.KeyCode.LeftBracket and ctrlPressed then
 		moveZIndex(-1)
 	elseif input.KeyCode == Enum.KeyCode.Z and ctrlPressed then
-		local shiftPressed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-			or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
 		if shiftPressed then
 			redoState()
 		else
@@ -1353,6 +1471,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		end
 	elseif input.KeyCode == Enum.KeyCode.Y and ctrlPressed then
 		redoState()
+	-- ★ 新機能：グループ化のショートカット (Ctrl+G / Ctrl+Shift+G)
+	elseif input.KeyCode == Enum.KeyCode.G and ctrlPressed then
+		if shiftPressed then
+			ungroupSelected()
+		else
+			groupSelected()
+		end
 	end
 end)
 
@@ -1617,9 +1742,7 @@ local function addElementToCanvas(className)
 	end
 	newPart.ZIndex = highestZ + 1
 
-	selectedElements = { newPart }
-	refreshHighlights()
-	updatePanel()
+	_G.selectElement(newPart)
 	saveState()
 end
 
@@ -1638,6 +1761,7 @@ btnExport.MouseButton1Click:Connect(function()
 		or Instance.new("ScreenGui", game:GetService("StarterGui"))
 	exportGui.Name = "UIBuilderExport"
 	exportGui:ClearAllChildren()
+	-- ★ グループ化された要素もそのまま階層構造を保って出力されます！
 	for _, element in ipairs(canvasArea:GetChildren()) do
 		if
 			element:IsA("GuiObject")
