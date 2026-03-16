@@ -168,6 +168,10 @@ local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113))
 local btnButton = createToolButton("＋ ボタン", Color3.fromRGB(155, 89, 182))
 local btnDuplicate = createToolButton("👯 複製", Color3.fromRGB(80, 80, 80), 80)
 local btnDelete = createToolButton("🗑️ 削除", Color3.fromRGB(231, 76, 60), 80)
+
+local btnUndo = createToolButton("↩️ Undo", Color3.fromRGB(60, 60, 60), 75)
+local btnRedo = createToolButton("↪️ Redo", Color3.fromRGB(60, 60, 60), 75)
+
 local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34))
 
 local mainArea = Instance.new("Frame", background)
@@ -307,6 +311,195 @@ local btnNone, btnX, btnY, btnXY =
 	createAutoBtn("OFF", 0), createAutoBtn("↔ X", 0.25), createAutoBtn("↕ Y", 0.5), createAutoBtn("↔↕ XY", 0.75)
 
 -- ==========================================
+-- ★ 独立したハイライト枠の構築 ★
+-- ==========================================
+local selectedElement = nil
+local selectionHighlight = Instance.new("Frame")
+selectionHighlight.Name = "SelectionHighlight"
+selectionHighlight.BackgroundTransparency = 1
+selectionHighlight.Active = false
+selectionHighlight.ZIndex = 9999
+
+local shStroke = Instance.new("UIStroke", selectionHighlight)
+shStroke.Color = Color3.fromRGB(0, 162, 255)
+shStroke.Thickness = 3
+shStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local shCorner = Instance.new("UICorner", selectionHighlight)
+
+RunService.Heartbeat:Connect(function()
+	if selectedElement and selectionHighlight.Parent == canvasArea then
+		selectionHighlight.Size = UDim2.new(0, selectedElement.AbsoluteSize.X, 0, selectedElement.AbsoluteSize.Y)
+		selectionHighlight.Position = selectedElement.Position
+		local c = selectedElement:FindFirstChildOfClass("UICorner")
+		shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
+	end
+end)
+
+-- --- システムロジック ---
+local availableFonts = {
+	Enum.Font.Gotham,
+	Enum.Font.GothamBold,
+	Enum.Font.FredokaOne,
+	Enum.Font.LuckiestGuy,
+	Enum.Font.Roboto,
+	Enum.Font.Arcade,
+}
+
+local allBlocks = {
+	blockText,
+	blockFont,
+	blockFontSize,
+	blockBgColor,
+	blockTxtColor,
+	blockOutline,
+	blockGradToggle,
+	blockGradColor,
+	blockCorner,
+	blockSize,
+	blockPadding,
+	blockZIndex,
+	blockAuto,
+}
+
+local function updatePanel()
+	if not selectedElement or not selectedElement.Parent then
+		selectionHighlight.Parent = nil
+		propTitle.Text = "No Selection"
+		for _, block in ipairs(allBlocks) do
+			block.Visible = false
+		end
+		return
+	end
+
+	selectionHighlight.Parent = canvasArea
+	for _, block in ipairs(allBlocks) do
+		block.Visible = true
+	end
+
+	propTitle.Text = selectedElement.ClassName
+	local isText = selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")
+	blockText.Visible = isText
+	blockFont.Visible = isText
+	blockFontSize.Visible = isText
+	blockTxtColor.Visible = isText
+
+	if isText then
+		textEditBox.Text = selectedElement.Text
+		fontSelectBtn.Text = selectedElement.Font.Name
+		fontSizeBox.Text = tostring(selectedElement.TextSize)
+		txtHex.Text = toHex(selectedElement.TextColor3)
+		txtChip.BackgroundColor3 = selectedElement.TextColor3
+	end
+
+	bgHex.Text = toHex(selectedElement.BackgroundColor3)
+	bgChip.BackgroundColor3 = selectedElement.BackgroundColor3
+	local stroke = selectedElement:FindFirstChild("DesignStroke")
+	outlineBox.Text = stroke and tostring(stroke.Thickness) or "0"
+
+	local grad = selectedElement:FindFirstChildOfClass("UIGradient")
+	gradToggleBtn.Text = grad and "ON" or "OFF"
+	gradToggleBtn.BackgroundColor3 = grad and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(50, 50, 50)
+	blockGradColor.Visible = (grad ~= nil)
+	if grad then
+		local color2 = grad.Color.Keypoints[2].Value
+		gr2Hex.Text = toHex(color2)
+		gr2Chip.BackgroundColor3 = color2
+	end
+
+	cornerEditBox.Text = selectedElement:FindFirstChildOfClass("UICorner")
+			and tostring(selectedElement:FindFirstChildOfClass("UICorner").CornerRadius.Offset)
+		or "0"
+	sizeX.Text, sizeY.Text =
+		tostring(math.floor(selectedElement.AbsoluteSize.X)), tostring(math.floor(selectedElement.AbsoluteSize.Y))
+	local pad = selectedElement:FindFirstChildOfClass("UIPadding")
+	if pad then
+		padT.Text, padB.Text, padL.Text, padR.Text =
+			tostring(pad.PaddingTop.Offset),
+			tostring(pad.PaddingBottom.Offset),
+			tostring(pad.PaddingLeft.Offset),
+			tostring(pad.PaddingRight.Offset)
+	else
+		padT.Text, padB.Text, padL.Text, padR.Text = "0", "0", "0", "0"
+	end
+	zIndexBox.Text = tostring(selectedElement.ZIndex)
+	local current = selectedElement.AutomaticSize
+	btnNone.BackgroundColor3 = current == Enum.AutomaticSize.None and Color3.fromRGB(0, 120, 215)
+		or Color3.fromRGB(50, 50, 50)
+	btnX.BackgroundColor3 = current == Enum.AutomaticSize.X and Color3.fromRGB(0, 120, 215)
+		or Color3.fromRGB(50, 50, 50)
+	btnY.BackgroundColor3 = current == Enum.AutomaticSize.Y and Color3.fromRGB(0, 120, 215)
+		or Color3.fromRGB(50, 50, 50)
+	btnXY.BackgroundColor3 = current == Enum.AutomaticSize.XY and Color3.fromRGB(0, 120, 215)
+		or Color3.fromRGB(50, 50, 50)
+end
+
+local function selectElement(element)
+	selectedElement = element
+	updatePanel()
+end
+
+-- ==========================================
+-- ★ 新開発！究極の「自作ヒストリーエンジン」 (Undo/Redo) ★
+-- ==========================================
+local historyStack = {}
+local historyIndex = 0
+local maxHistory = 50
+
+local function saveState()
+	for i = #historyStack, historyIndex + 1, -1 do
+		historyStack[i] = nil
+	end
+
+	local state = {}
+	for _, child in ipairs(canvasArea:GetChildren()) do
+		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
+			table.insert(state, child:Clone())
+		end
+	end
+
+	table.insert(historyStack, state)
+	if #historyStack > maxHistory then
+		table.remove(historyStack, 1)
+	else
+		historyIndex = historyIndex + 1
+	end
+end
+
+local function loadState(index)
+	if index < 1 or index > #historyStack then
+		return
+	end
+	for _, child in ipairs(canvasArea:GetChildren()) do
+		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
+			child:Destroy()
+		end
+	end
+	local state = historyStack[index]
+	for _, savedChild in ipairs(state) do
+		local clone = savedChild:Clone()
+		clone.Parent = canvasArea
+	end
+	selectElement(nil)
+end
+
+local function undoState()
+	if historyIndex > 1 then
+		historyIndex = historyIndex - 1
+		loadState(historyIndex)
+	end
+end
+local function redoState()
+	if historyIndex < #historyStack then
+		historyIndex = historyIndex + 1
+		loadState(historyIndex)
+	end
+end
+
+btnUndo.MouseButton1Click:Connect(undoState)
+btnRedo.MouseButton1Click:Connect(redoState)
+
+-- ==========================================
 -- ★ 60fps カラーピッカー ★
 -- ==========================================
 local pickerBlocker = Instance.new("TextButton")
@@ -440,6 +633,7 @@ prevStroke.Color = Color3.fromRGB(60, 60, 60)
 
 local currentHue, currentSat, currentVal = 0, 1, 1
 local activeColorCallback = nil
+local pickerOriginalColor = nil
 
 local function updateColorPickerVisuals()
 	local bgHsv = Color3.fromHSV(currentHue, 1, 1)
@@ -457,6 +651,9 @@ local function updateColorPickerVisuals()
 	local finalColor = Color3.fromHSV(currentHue, currentSat, currentVal)
 	if colorPreview.BackgroundColor3 ~= finalColor then
 		colorPreview.BackgroundColor3 = finalColor
+	end
+	if activeColorCallback then
+		activeColorCallback(finalColor)
 	end
 end
 
@@ -485,8 +682,6 @@ local function setupSlider(area, isHue)
 					loopConn:Disconnect()
 				end
 			end)
-
-			-- ピッカーのスライダーも確実に判定
 			local endConn
 			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
@@ -505,162 +700,40 @@ local function closePicker()
 	pickerBlocker.Visible = false
 	colorPickerBase.Visible = false
 end
+
 local function openCustomPicker(initialColor, callback)
 	activeColorCallback = callback
+	pickerOriginalColor = initialColor
 	currentHue, currentSat, currentVal = initialColor:ToHSV()
 	updateColorPickerVisuals()
 	pickerBlocker.Visible = true
 	colorPickerBase.Visible = true
 end
 
-pickerBlocker.MouseButton1Click:Connect(closePicker)
-closeCpBtn.MouseButton1Click:Connect(closePicker)
-confirmBtn.MouseButton1Click:Connect(function()
-	if activeColorCallback then
-		activeColorCallback(Color3.fromHSV(currentHue, currentSat, currentVal))
+local function cancelPicker()
+	if activeColorCallback and pickerOriginalColor then
+		activeColorCallback(pickerOriginalColor)
 	end
 	closePicker()
+end
+
+pickerBlocker.MouseButton1Click:Connect(cancelPicker)
+closeCpBtn.MouseButton1Click:Connect(cancelPicker)
+
+confirmBtn.MouseButton1Click:Connect(function()
+	closePicker()
+	saveState()
 end)
 
 -- ==========================================
--- ★ 独立したハイライト枠の構築 ★
+-- ★ ガラス板による完全ドラッグ管理 (バグ修正版) ★
 -- ==========================================
-local selectedElement = nil
-local selectionHighlight = Instance.new("Frame")
-selectionHighlight.Name = "SelectionHighlight"
-selectionHighlight.BackgroundTransparency = 1
-selectionHighlight.Active = false
-selectionHighlight.ZIndex = 9999
-
-local shStroke = Instance.new("UIStroke", selectionHighlight)
-shStroke.Color = Color3.fromRGB(0, 162, 255)
-shStroke.Thickness = 3
-shStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
-local shCorner = Instance.new("UICorner", selectionHighlight)
-
-RunService.Heartbeat:Connect(function()
-	if selectedElement and selectionHighlight.Parent == canvasArea then
-		selectionHighlight.Size = UDim2.new(0, selectedElement.AbsoluteSize.X, 0, selectedElement.AbsoluteSize.Y)
-		selectionHighlight.Position = selectedElement.Position
-		local c = selectedElement:FindFirstChildOfClass("UICorner")
-		shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
-	end
-end)
-
--- --- システムロジック ---
-local availableFonts = {
-	Enum.Font.Gotham,
-	Enum.Font.GothamBold,
-	Enum.Font.FredokaOne,
-	Enum.Font.LuckiestGuy,
-	Enum.Font.Roboto,
-	Enum.Font.Arcade,
-}
-
-local allBlocks = {
-	blockText,
-	blockFont,
-	blockFontSize,
-	blockBgColor,
-	blockTxtColor,
-	blockOutline,
-	blockGradToggle,
-	blockGradColor,
-	blockCorner,
-	blockSize,
-	blockPadding,
-	blockZIndex,
-	blockAuto,
-}
-
-local function updatePanel()
-	if not selectedElement then
-		selectionHighlight.Parent = nil
-		propTitle.Text = "No Selection"
-		for _, block in ipairs(allBlocks) do
-			block.Visible = false
-		end
-		return
-	end
-
-	selectionHighlight.Parent = canvasArea
-	for _, block in ipairs(allBlocks) do
-		block.Visible = true
-	end
-
-	propTitle.Text = selectedElement.ClassName
-	local isText = selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")
-	blockText.Visible = isText
-	blockFont.Visible = isText
-	blockFontSize.Visible = isText
-	blockTxtColor.Visible = isText
-
-	if isText then
-		textEditBox.Text = selectedElement.Text
-		fontSelectBtn.Text = selectedElement.Font.Name
-		fontSizeBox.Text = tostring(selectedElement.TextSize)
-		txtHex.Text = toHex(selectedElement.TextColor3)
-		txtChip.BackgroundColor3 = selectedElement.TextColor3
-	end
-
-	bgHex.Text = toHex(selectedElement.BackgroundColor3)
-	bgChip.BackgroundColor3 = selectedElement.BackgroundColor3
-	local stroke = selectedElement:FindFirstChild("DesignStroke")
-	outlineBox.Text = stroke and tostring(stroke.Thickness) or "0"
-
-	local grad = selectedElement:FindFirstChildOfClass("UIGradient")
-	gradToggleBtn.Text = grad and "ON" or "OFF"
-	gradToggleBtn.BackgroundColor3 = grad and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(50, 50, 50)
-	blockGradColor.Visible = (grad ~= nil)
-	if grad then
-		local color2 = grad.Color.Keypoints[2].Value
-		gr2Hex.Text = toHex(color2)
-		gr2Chip.BackgroundColor3 = color2
-	end
-
-	cornerEditBox.Text = selectedElement:FindFirstChildOfClass("UICorner")
-			and tostring(selectedElement:FindFirstChildOfClass("UICorner").CornerRadius.Offset)
-		or "0"
-	sizeX.Text, sizeY.Text =
-		tostring(math.floor(selectedElement.AbsoluteSize.X)), tostring(math.floor(selectedElement.AbsoluteSize.Y))
-	local pad = selectedElement:FindFirstChildOfClass("UIPadding")
-	if pad then
-		padT.Text, padB.Text, padL.Text, padR.Text =
-			tostring(pad.PaddingTop.Offset),
-			tostring(pad.PaddingBottom.Offset),
-			tostring(pad.PaddingLeft.Offset),
-			tostring(pad.PaddingRight.Offset)
-	else
-		padT.Text, padB.Text, padL.Text, padR.Text = "0", "0", "0", "0"
-	end
-	zIndexBox.Text = tostring(selectedElement.ZIndex)
-	local current = selectedElement.AutomaticSize
-	btnNone.BackgroundColor3 = current == Enum.AutomaticSize.None and Color3.fromRGB(0, 120, 215)
-		or Color3.fromRGB(50, 50, 50)
-	btnX.BackgroundColor3 = current == Enum.AutomaticSize.X and Color3.fromRGB(0, 120, 215)
-		or Color3.fromRGB(50, 50, 50)
-	btnY.BackgroundColor3 = current == Enum.AutomaticSize.Y and Color3.fromRGB(0, 120, 215)
-		or Color3.fromRGB(50, 50, 50)
-	btnXY.BackgroundColor3 = current == Enum.AutomaticSize.XY and Color3.fromRGB(0, 120, 215)
-		or Color3.fromRGB(50, 50, 50)
-end
-
-local function selectElement(element)
-	selectedElement = element
-	updatePanel()
-end
-
--- ==========================================
--- ★ Figma式「透明なガラスの板」によるクリック・ドラッグ統合管理 ★
--- ==========================================
-
 local clickCatcher = Instance.new("TextButton")
 clickCatcher.Name = "ClickCatcher"
 clickCatcher.Size = UDim2.new(1, 0, 1, 0)
 clickCatcher.BackgroundTransparency = 1
 clickCatcher.Text = ""
-clickCatcher.ZIndex = 9998 -- 最前面に置く
+clickCatcher.ZIndex = 9998
 clickCatcher.Parent = canvasArea
 
 local draggingElement = nil
@@ -679,13 +752,11 @@ clickCatcher.InputBegan:Connect(function(input)
 		local highestZIndex = -math.huge
 		local highestChildIndex = -1
 
-		-- 数学的なヒット判定（レイキャスト）
 		local children = canvasArea:GetChildren()
 		for i, child in ipairs(children) do
 			if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
 				local pos = child.AbsolutePosition
 				local size = child.AbsoluteSize
-
 				if
 					mousePos.X >= pos.X
 					and mousePos.X <= (pos.X + size.X)
@@ -726,10 +797,14 @@ clickCatcher.InputBegan:Connect(function(input)
 				end
 			end)
 
-			-- ★ ここが修正の要！ input.Changed を監視して離した瞬間を逃さない！
+			-- ★ 今回の完全修正：正しく input.Changed を監視してマウス離上を拾う！
 			local endConn
 			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
+					if draggingElement and draggingElement.Position ~= dragStartOffset then
+						saveState()
+					end
+
 					draggingElement = nil
 					if dragLoopConn then
 						dragLoopConn:Disconnect()
@@ -744,7 +819,7 @@ clickCatcher.InputBegan:Connect(function(input)
 end)
 
 -- ==========================================
--- ★ 削除・複製ロジック ★
+-- ★ 削除・複製・プロパティ変更ロジック (保存連動) ★
 -- ==========================================
 local function deleteSelected()
 	if selectedElement then
@@ -752,6 +827,7 @@ local function deleteSelected()
 		selectedElement:Destroy()
 		selectedElement = nil
 		updatePanel()
+		saveState()
 	end
 end
 
@@ -767,6 +843,7 @@ local function duplicateSelected()
 		)
 		clone.ZIndex = clone.ZIndex + 1
 		selectElement(clone)
+		saveState()
 	end
 end
 
@@ -775,12 +852,14 @@ local function updateZIndexDirect()
 		selectedElement.ZIndex = tonumber(zIndexBox.Text) or selectedElement.ZIndex
 		task.wait(0.05)
 		updatePanel()
+		saveState()
 	end
 end
 local function moveZIndex(amount)
 	if selectedElement then
 		selectedElement.ZIndex = selectedElement.ZIndex + amount
 		updatePanel()
+		saveState()
 	end
 end
 
@@ -794,6 +873,7 @@ btnZUp.MouseButton1Click:Connect(function()
 	moveZIndex(1)
 end)
 
+-- キーボードショートカット
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then
 		return
@@ -818,10 +898,20 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		moveZIndex(1)
 	elseif input.KeyCode == Enum.KeyCode.LeftBracket and ctrlPressed then
 		moveZIndex(-1)
+	elseif input.KeyCode == Enum.KeyCode.Z and ctrlPressed then
+		local shiftPressed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+			or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+		if shiftPressed then
+			redoState()
+		else
+			undoState()
+		end
+	elseif input.KeyCode == Enum.KeyCode.Y and ctrlPressed then
+		redoState()
 	end
 end)
 
--- --- 反映イベント ---
+-- --- プロパティの反映 ＋ Undo保存 ---
 local function applyHexColors()
 	if selectedElement then
 		local newBg = fromHex(bgHex.Text)
@@ -842,9 +932,19 @@ local function applyHexColors()
 		updatePanel()
 	end
 end
-bgHex.FocusLost:Connect(applyHexColors)
-txtHex.FocusLost:Connect(applyHexColors)
-gr2Hex.FocusLost:Connect(applyHexColors)
+
+bgHex.FocusLost:Connect(function()
+	applyHexColors()
+	saveState()
+end)
+txtHex.FocusLost:Connect(function()
+	applyHexColors()
+	saveState()
+end)
+gr2Hex.FocusLost:Connect(function()
+	applyHexColors()
+	saveState()
+end)
 
 bgChip.MouseButton1Click:Connect(function()
 	if selectedElement then
@@ -871,22 +971,26 @@ gr2Chip.MouseButton1Click:Connect(function()
 		end)
 	end
 end)
+
 for _, btn in ipairs(bgPresets) do
 	btn.MouseButton1Click:Connect(function()
 		bgHex.Text = toHex(btn.BackgroundColor3)
 		applyHexColors()
+		saveState()
 	end)
 end
 for _, btn in ipairs(txtPresets) do
 	btn.MouseButton1Click:Connect(function()
 		txtHex.Text = toHex(btn.BackgroundColor3)
 		applyHexColors()
+		saveState()
 	end)
 end
 for _, btn in ipairs(gr2Presets) do
 	btn.MouseButton1Click:Connect(function()
 		gr2Hex.Text = toHex(btn.BackgroundColor3)
 		applyHexColors()
+		saveState()
 	end)
 end
 
@@ -896,6 +1000,7 @@ outlineBox.FocusLost:Connect(function()
 		stroke.Name = "DesignStroke"
 		stroke.Thickness = tonumber(outlineBox.Text) or 0
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		saveState()
 	end
 end)
 gradToggleBtn.MouseButton1Click:Connect(function()
@@ -908,6 +1013,7 @@ gradToggleBtn.MouseButton1Click:Connect(function()
 			applyHexColors()
 		end
 		updatePanel()
+		saveState()
 	end
 end)
 textEditBox.FocusLost:Connect(function()
@@ -915,6 +1021,7 @@ textEditBox.FocusLost:Connect(function()
 		selectedElement.Text = textEditBox.Text
 		task.wait(0.05)
 		updatePanel()
+		saveState()
 	end
 end)
 fontSelectBtn.MouseButton1Click:Connect(function()
@@ -929,6 +1036,7 @@ fontSelectBtn.MouseButton1Click:Connect(function()
 		end
 		selectedElement.Font = availableFonts[ni]
 		updatePanel()
+		saveState()
 	end
 end)
 fontSizeBox.FocusLost:Connect(function()
@@ -936,14 +1044,17 @@ fontSizeBox.FocusLost:Connect(function()
 		selectedElement.TextSize = tonumber(fontSizeBox.Text) or 14
 		task.wait(0.05)
 		updatePanel()
+		saveState()
 	end
 end)
 cornerEditBox.FocusLost:Connect(function()
 	if selectedElement then
 		local c = selectedElement:FindFirstChildOfClass("UICorner") or Instance.new("UICorner", selectedElement)
 		c.CornerRadius = UDim.new(0, tonumber(cornerEditBox.Text) or 0)
+		saveState()
 	end
 end)
+
 local function applySize()
 	if selectedElement then
 		selectedElement.AutomaticSize = Enum.AutomaticSize.None
@@ -955,10 +1066,12 @@ local function applySize()
 		)
 		task.wait(0.05)
 		updatePanel()
+		saveState()
 	end
 end
 sizeX.FocusLost:Connect(applySize)
 sizeY.FocusLost:Connect(applySize)
+
 local function updatePadding()
 	if selectedElement then
 		local p = selectedElement:FindFirstChildOfClass("UIPadding") or Instance.new("UIPadding", selectedElement)
@@ -973,12 +1086,14 @@ local function updatePadding()
 		end
 		task.wait(0.05)
 		updatePanel()
+		saveState()
 	end
 end
 padT.FocusLost:Connect(updatePadding)
 padB.FocusLost:Connect(updatePadding)
 padL.FocusLost:Connect(updatePadding)
 padR.FocusLost:Connect(updatePadding)
+
 local function setAutoSize(mode)
 	if selectedElement then
 		selectedElement.AutomaticSize = mode
@@ -986,6 +1101,7 @@ local function setAutoSize(mode)
 			selectedElement.TextWrapped = (mode == Enum.AutomaticSize.None)
 		end
 		updatePanel()
+		saveState()
 	end
 end
 btnNone.MouseButton1Click:Connect(function()
@@ -1022,7 +1138,6 @@ local function addElementToCanvas(className)
 	s.Name = "DesignStroke"
 
 	newPart.Parent = canvasArea
-
 	local highestZ = 0
 	for _, child in ipairs(canvasArea:GetChildren()) do
 		if
@@ -1039,6 +1154,7 @@ local function addElementToCanvas(className)
 	newPart.ZIndex = highestZ + 1
 
 	selectElement(newPart)
+	saveState()
 end
 
 btnFrame.MouseButton1Click:Connect(function()
@@ -1064,7 +1180,10 @@ btnExport.MouseButton1Click:Connect(function()
 	end
 end)
 
+-- 初期化
 updatePanel()
+saveState()
+
 toggleButton.Click:Connect(function()
 	widget.Enabled = not widget.Enabled
 end)
