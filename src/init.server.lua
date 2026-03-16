@@ -1,7 +1,7 @@
 -- src/init.server.lua
 
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService") -- ★ フレーム毎の処理用に新しく追加！
+local RunService = game:GetService("RunService")
 
 local toolbar = plugin:CreateToolbar("UI Builder Pro")
 local toggleButton = toolbar:CreateButton("Open Editor", "UI Builderを開く", "rbxassetid://4483345998")
@@ -147,13 +147,13 @@ topBar.Parent = background
 
 local topLayout = Instance.new("UIListLayout", topBar)
 topLayout.FillDirection = Enum.FillDirection.Horizontal
-topLayout.Padding = UDim.new(0, 12)
+topLayout.Padding = UDim.new(0, 8)
 topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 Instance.new("UIPadding", topBar).PaddingLeft = UDim.new(0, 15)
 
-local function createToolButton(text, color)
+local function createToolButton(text, color, width)
 	local btn = Instance.new("TextButton", topBar)
-	btn.Size = UDim2.new(0, 100, 0, 34)
+	btn.Size = UDim2.new(0, width or 90, 0, 34)
 	btn.BackgroundColor3 = color
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	btn.Text = text
@@ -166,6 +166,8 @@ end
 local btnFrame = createToolButton("＋ 四角形", Color3.fromRGB(0, 120, 215))
 local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113))
 local btnButton = createToolButton("＋ ボタン", Color3.fromRGB(155, 89, 182))
+local btnDuplicate = createToolButton("👯 複製", Color3.fromRGB(80, 80, 80), 80)
+local btnDelete = createToolButton("🗑️ 削除", Color3.fromRGB(231, 76, 60), 80)
 local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34))
 
 local mainArea = Instance.new("Frame", background)
@@ -184,7 +186,7 @@ propertyPanel.Size = UDim2.new(0, 260, 1, 0)
 propertyPanel.Position = UDim2.new(1, -260, 0, 0)
 propertyPanel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 propertyPanel.BorderSizePixel = 0
-propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 1100)
+propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 1250)
 propertyPanel.ScrollBarThickness = 2
 
 local propLayout = Instance.new("UIListLayout", propertyPanel)
@@ -216,6 +218,10 @@ fontSelectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 fontSelectBtn.Font = Enum.Font.BuilderSansBold
 fontSelectBtn.TextSize = 12
 Instance.new("UICorner", fontSelectBtn).CornerRadius = UDim.new(0, 4)
+
+local blockFontSize, areaFontSize = createPropertyBlock("FONT SIZE (px)", propertyPanel, 28)
+local fontSizeBox = createTextBox(areaFontSize)
+fontSizeBox.PlaceholderText = "14"
 
 local blockBgColor, areaBgColor = createPropertyBlock("BACKGROUND COLOR (HEX)", propertyPanel, 55)
 local bgHex, bgChip, bgPresets = createColorInput(areaBgColor)
@@ -258,6 +264,33 @@ local function createPadBox()
 end
 local padT, padB, padL, padR = createPadBox(), createPadBox(), createPadBox(), createPadBox()
 
+-- ★ 新機能：Z-INDEX 追加
+local blockZIndex, areaZIndex = createPropertyBlock("Z-INDEX (LAYER ORDER)", propertyPanel, 28)
+local zIndexContainer = Instance.new("Frame", areaZIndex)
+zIndexContainer.Size = UDim2.new(1, 0, 1, 0)
+zIndexContainer.BackgroundTransparency = 1
+local zLayout = Instance.new("UIListLayout", zIndexContainer)
+zLayout.FillDirection = Enum.FillDirection.Horizontal
+zLayout.Padding = UDim.new(0, 5)
+local zIndexBox = createTextBox(zIndexContainer)
+zIndexBox.Size = UDim2.new(0.45, 0, 1, 0)
+local btnZDown = Instance.new("TextButton", zIndexContainer)
+btnZDown.Size = UDim2.new(0.25, 0, 1, 0)
+btnZDown.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+btnZDown.TextColor3 = Color3.fromRGB(200, 200, 200)
+btnZDown.Text = "-1 (奥)"
+btnZDown.Font = Enum.Font.BuilderSansBold
+btnZDown.TextSize = 10
+Instance.new("UICorner", btnZDown).CornerRadius = UDim.new(0, 4)
+local btnZUp = Instance.new("TextButton", zIndexContainer)
+btnZUp.Size = UDim2.new(0.25, 0, 1, 0)
+btnZUp.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+btnZUp.TextColor3 = Color3.fromRGB(200, 200, 200)
+btnZUp.Text = "+1 (手前)"
+btnZUp.Font = Enum.Font.BuilderSansBold
+btnZUp.TextSize = 10
+Instance.new("UICorner", btnZUp).CornerRadius = UDim.new(0, 4)
+
 local blockAuto, areaAuto = createPropertyBlock("AUTO LAYOUT (GROW)", propertyPanel, 28)
 local function createAutoBtn(text, pos)
 	local b = Instance.new("TextButton", areaAuto)
@@ -277,7 +310,6 @@ local btnNone, btnX, btnY, btnXY =
 -- ==========================================
 -- ★ 60fps ヌルヌル駆動カラーピッカー ★
 -- ==========================================
-
 local pickerBlocker = Instance.new("TextButton")
 pickerBlocker.Size = UDim2.new(1, 0, 1, 0)
 pickerBlocker.BackgroundTransparency = 0.5
@@ -287,7 +319,6 @@ pickerBlocker.AutoButtonColor = false
 pickerBlocker.ZIndex = 999
 pickerBlocker.Visible = false
 pickerBlocker.Parent = background
-
 local colorPickerBase = Instance.new("TextButton")
 colorPickerBase.Size = UDim2.new(0, 220, 0, 280)
 colorPickerBase.Position = UDim2.new(0.5, -110, 0.5, -140)
@@ -302,7 +333,6 @@ Instance.new("UICorner", colorPickerBase).CornerRadius = UDim.new(0, 8)
 local cpShadow = Instance.new("UIStroke", colorPickerBase)
 cpShadow.Color = Color3.fromRGB(20, 20, 20)
 cpShadow.Thickness = 2
-
 local cpTitleUI = Instance.new("TextLabel")
 cpTitleUI.Size = UDim2.new(1, -30, 0, 30)
 cpTitleUI.Position = UDim2.new(0, 10, 0, 0)
@@ -314,7 +344,6 @@ cpTitleUI.TextSize = 14
 cpTitleUI.TextXAlignment = Enum.TextXAlignment.Left
 cpTitleUI.ZIndex = 1001
 cpTitleUI.Parent = colorPickerBase
-
 local closeCpBtn = Instance.new("TextButton")
 closeCpBtn.Size = UDim2.new(0, 30, 0, 30)
 closeCpBtn.Position = UDim2.new(1, -30, 0, 0)
@@ -325,7 +354,6 @@ closeCpBtn.Font = Enum.Font.BuilderSansBold
 closeCpBtn.TextSize = 14
 closeCpBtn.ZIndex = 1001
 closeCpBtn.Parent = colorPickerBase
-
 local svArea = Instance.new("Frame")
 svArea.Size = UDim2.new(0, 180, 0, 150)
 svArea.Position = UDim2.new(0, 20, 0, 40)
@@ -334,7 +362,6 @@ svArea.Active = true
 svArea.ZIndex = 1001
 svArea.Parent = colorPickerBase
 Instance.new("UICorner", svArea).CornerRadius = UDim.new(0, 4)
-
 local satOverlay = Instance.new("Frame")
 satOverlay.Size = UDim2.new(1, 0, 1, 0)
 satOverlay.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -343,7 +370,6 @@ satOverlay.Parent = svArea
 Instance.new("UICorner", satOverlay).CornerRadius = UDim.new(0, 4)
 local satGrad = Instance.new("UIGradient", satOverlay)
 satGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
-
 local valOverlay = Instance.new("Frame")
 valOverlay.Size = UDim2.new(1, 0, 1, 0)
 valOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -353,7 +379,6 @@ Instance.new("UICorner", valOverlay).CornerRadius = UDim.new(0, 4)
 local valGrad = Instance.new("UIGradient", valOverlay)
 valGrad.Rotation = 90
 valGrad.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) })
-
 local svCursor = Instance.new("Frame")
 svCursor.Size = UDim2.new(0, 12, 0, 12)
 svCursor.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -364,7 +389,6 @@ Instance.new("UICorner", svCursor).CornerRadius = UDim.new(1, 0)
 local svCursorStroke = Instance.new("UIStroke", svCursor)
 svCursorStroke.Color = Color3.new(0, 0, 0)
 svCursorStroke.Thickness = 2
-
 local hueArea = Instance.new("Frame")
 hueArea.Size = UDim2.new(0, 180, 0, 16)
 hueArea.Position = UDim2.new(0, 20, 0, 205)
@@ -383,7 +407,6 @@ hueGrad.Color = ColorSequence.new({
 	ColorSequenceKeypoint.new(5 / 6, Color3.fromHSV(5 / 6, 1, 1)),
 	ColorSequenceKeypoint.new(1, Color3.fromHSV(1, 1, 1)),
 })
-
 local hueCursor = Instance.new("Frame")
 hueCursor.Size = UDim2.new(0, 16, 0, 20)
 hueCursor.Position = UDim2.new(0, 0, 0.5, 0)
@@ -395,7 +418,6 @@ Instance.new("UICorner", hueCursor).CornerRadius = UDim.new(1, 0)
 local hueCursorStroke = Instance.new("UIStroke", hueCursor)
 hueCursorStroke.Color = Color3.new(0, 0, 0)
 hueCursorStroke.Thickness = 2
-
 local confirmBtn = Instance.new("TextButton")
 confirmBtn.Size = UDim2.new(0, 140, 0, 30)
 confirmBtn.Position = UDim2.new(0, 20, 0, 235)
@@ -407,7 +429,6 @@ confirmBtn.TextSize = 13
 confirmBtn.ZIndex = 1001
 confirmBtn.Parent = colorPickerBase
 Instance.new("UICorner", confirmBtn).CornerRadius = UDim.new(0, 4)
-
 local colorPreview = Instance.new("Frame")
 colorPreview.Size = UDim2.new(0, 30, 0, 30)
 colorPreview.Position = UDim2.new(0, 170, 0, 235)
@@ -421,41 +442,33 @@ prevStroke.Color = Color3.fromRGB(60, 60, 60)
 local currentHue, currentSat, currentVal = 0, 1, 1
 local activeColorCallback = nil
 
--- ★ UI更新を最適化し、無駄な再描画を防ぐ
 local function updateColorPickerVisuals()
 	local bgHsv = Color3.fromHSV(currentHue, 1, 1)
 	if svArea.BackgroundColor3 ~= bgHsv then
 		svArea.BackgroundColor3 = bgHsv
 	end
-
 	local svPos = UDim2.new(currentSat, 0, 1 - currentVal, 0)
 	if svCursor.Position ~= svPos then
 		svCursor.Position = svPos
 	end
-
 	local hPos = UDim2.new(currentHue, 0, 0.5, 0)
 	if hueCursor.Position ~= hPos then
 		hueCursor.Position = hPos
 	end
-
 	local finalColor = Color3.fromHSV(currentHue, currentSat, currentVal)
 	if colorPreview.BackgroundColor3 ~= finalColor then
 		colorPreview.BackgroundColor3 = finalColor
 	end
 end
 
--- ★ 劇的改善：RunServiceを使って毎フレーム確実に位置を計算する最強のドラッグシステム
 local function setupSlider(area, isHue)
 	area.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			local dragging = true
-
 			local function update()
-				-- マウスの位置を直接ウィジェットから取得 (これなら確実に最新の位置が取れます)
 				local mousePos = widget:GetRelativeMousePosition()
 				local relX = math.clamp(mousePos.X - area.AbsolutePosition.X, 0, area.AbsoluteSize.X)
 				local relY = math.clamp(mousePos.Y - area.AbsolutePosition.Y, 0, area.AbsoluteSize.Y)
-
 				if isHue then
 					currentHue = relX / area.AbsoluteSize.X
 				else
@@ -464,10 +477,7 @@ local function setupSlider(area, isHue)
 				end
 				updateColorPickerVisuals()
 			end
-
-			update() -- クリックした瞬間の更新
-
-			-- 毎フレーム超高速でUIを更新
+			update()
 			local loopConn
 			loopConn = RunService.Heartbeat:Connect(function()
 				if dragging then
@@ -476,8 +486,6 @@ local function setupSlider(area, isHue)
 					loopConn:Disconnect()
 				end
 			end)
-
-			-- マウスを離した判定
 			local endConn
 			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
@@ -489,7 +497,6 @@ local function setupSlider(area, isHue)
 		end
 	end)
 end
-
 setupSlider(svArea, false)
 setupSlider(hueArea, true)
 
@@ -497,7 +504,6 @@ local function closePicker()
 	pickerBlocker.Visible = false
 	colorPickerBase.Visible = false
 end
-
 local function openCustomPicker(initialColor, callback)
 	activeColorCallback = callback
 	currentHue, currentSat, currentVal = initialColor:ToHSV()
@@ -508,7 +514,6 @@ end
 
 pickerBlocker.MouseButton1Click:Connect(closePicker)
 closeCpBtn.MouseButton1Click:Connect(closePicker)
-
 confirmBtn.MouseButton1Click:Connect(function()
 	if activeColorCallback then
 		activeColorCallback(Color3.fromHSV(currentHue, currentSat, currentVal))
@@ -533,18 +538,47 @@ local availableFonts = {
 	Enum.Font.Arcade,
 }
 
+-- ★ すべてのプロパティブロックをリスト化して一括管理
+local allBlocks = {
+	blockText,
+	blockFont,
+	blockFontSize,
+	blockBgColor,
+	blockTxtColor,
+	blockOutline,
+	blockGradToggle,
+	blockGradColor,
+	blockCorner,
+	blockSize,
+	blockPadding,
+	blockZIndex,
+	blockAuto, -- blockZIndex を追加！
+}
+
 local function updatePanel()
 	if not selectedElement then
+		propTitle.Text = "No Selection"
+		for _, block in ipairs(allBlocks) do
+			block.Visible = false
+		end
 		return
 	end
-	propTitle.Text = selectedElement.ClassName
 
+	for _, block in ipairs(allBlocks) do
+		block.Visible = true
+	end
+
+	propTitle.Text = selectedElement.ClassName
 	local isText = selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")
-	blockText.Visible, blockFont.Visible, blockTxtColor.Visible = isText, isText, isText
+	blockText.Visible = isText
+	blockFont.Visible = isText
+	blockFontSize.Visible = isText
+	blockTxtColor.Visible = isText
 
 	if isText then
 		textEditBox.Text = selectedElement.Text
 		fontSelectBtn.Text = selectedElement.Font.Name
+		fontSizeBox.Text = tostring(selectedElement.TextSize)
 		txtHex.Text = toHex(selectedElement.TextColor3)
 		txtChip.BackgroundColor3 = selectedElement.TextColor3
 	end
@@ -580,6 +614,10 @@ local function updatePanel()
 	else
 		padT.Text, padB.Text, padL.Text, padR.Text = "0", "0", "0", "0"
 	end
+
+	-- ★ ZIndex の同期
+	zIndexBox.Text = tostring(selectedElement.ZIndex)
+
 	local current = selectedElement.AutomaticSize
 	btnNone.BackgroundColor3 = current == Enum.AutomaticSize.None and Color3.fromRGB(0, 120, 215)
 		or Color3.fromRGB(50, 50, 50)
@@ -596,6 +634,94 @@ local function selectElement(element)
 	selectionHighlight.Parent = element
 	updatePanel()
 end
+
+-- ==========================================
+-- ★ 削除・複製・ZIndex ロジック ★
+-- ==========================================
+local function deleteSelected()
+	if selectedElement then
+		selectionHighlight.Parent = nil
+		selectedElement:Destroy()
+		selectedElement = nil
+		updatePanel()
+	end
+end
+
+local function duplicateSelected()
+	if selectedElement then
+		local clone = selectedElement:Clone()
+		clone.Parent = canvasArea
+		clone.Position = UDim2.new(
+			selectedElement.Position.X.Scale,
+			selectedElement.Position.X.Offset + 15,
+			selectedElement.Position.Y.Scale,
+			selectedElement.Position.Y.Offset + 15
+		)
+		-- 複製時にZIndexを手前にする
+		clone.ZIndex = clone.ZIndex + 1
+		local h = clone:FindFirstChild("SelectionHighlight")
+		if h then
+			h:Destroy()
+		end
+
+		makeDraggable(clone)
+		selectElement(clone)
+	end
+end
+
+local function updateZIndexDirect()
+	if selectedElement then
+		selectedElement.ZIndex = tonumber(zIndexBox.Text) or selectedElement.ZIndex
+		task.wait(0.05)
+		updatePanel()
+	end
+end
+
+local function moveZIndex(amount)
+	if selectedElement then
+		selectedElement.ZIndex = selectedElement.ZIndex + amount
+		updatePanel()
+	end
+end
+
+btnDelete.MouseButton1Click:Connect(deleteSelected)
+btnDuplicate.MouseButton1Click:Connect(duplicateSelected)
+zIndexBox.FocusLost:Connect(updateZIndexDirect)
+btnZDown.MouseButton1Click:Connect(function()
+	moveZIndex(-1)
+end)
+btnZUp.MouseButton1Click:Connect(function()
+	moveZIndex(1)
+end)
+
+-- キーボードショートカット
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then
+		return
+	end
+	if UserInputService:GetFocusedTextBox() then
+		return
+	end
+	if not widget.Enabled then
+		return
+	end
+
+	local ctrlPressed = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+		or UserInputService:IsKeyDown(Enum.KeyCode.LeftSuper)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightSuper)
+
+	if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Delete then
+		deleteSelected()
+	elseif input.KeyCode == Enum.KeyCode.D and ctrlPressed then
+		duplicateSelected()
+	-- ★ ZIndex用ショートカット (Ctrl + ] で手前、Ctrl + [ で奥)
+	elseif input.KeyCode == Enum.KeyCode.RightBracket and ctrlPressed then
+		moveZIndex(1)
+	elseif input.KeyCode == Enum.KeyCode.LeftBracket and ctrlPressed then
+		moveZIndex(-1)
+	end
+end)
 
 -- --- 反映イベント ---
 local function applyHexColors()
@@ -712,6 +838,15 @@ fontSelectBtn.MouseButton1Click:Connect(function()
 		updatePanel()
 	end
 end)
+
+fontSizeBox.FocusLost:Connect(function()
+	if selectedElement and (selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")) then
+		selectedElement.TextSize = tonumber(fontSizeBox.Text) or 14
+		task.wait(0.05)
+		updatePanel()
+	end
+end)
+
 cornerEditBox.FocusLost:Connect(function()
 	if selectedElement then
 		local c = selectedElement:FindFirstChildOfClass("UICorner") or Instance.new("UICorner", selectedElement)
@@ -784,10 +919,10 @@ canvasArea.InputBegan:Connect(function(input)
 		end
 		selectedElement = nil
 		selectionHighlight.Parent = nil
-		propTitle.Text = "No Selection"
+		updatePanel()
 	end
 end)
-local function makeDraggable(guiObject)
+function makeDraggable(guiObject)
 	local dragging = false
 	local dragStart, startPos
 	guiObject.InputBegan:Connect(function(input)
@@ -869,6 +1004,8 @@ btnExport.MouseButton1Click:Connect(function()
 		end
 	end
 end)
+
+updatePanel()
 toggleButton.Click:Connect(function()
 	widget.Enabled = not widget.Enabled
 end)
