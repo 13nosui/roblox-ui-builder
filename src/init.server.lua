@@ -3,14 +3,40 @@
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
+-- ★ Mac対応：修飾キー（Cmd/Ctrl/Shift）を絶対に逃さないヘルパー関数
+local function isMultiSelectKey()
+	return UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+		or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+		or UserInputService:IsKeyDown(Enum.KeyCode.LeftMeta)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightMeta)
+		or UserInputService:IsKeyDown(Enum.KeyCode.LeftSuper)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightSuper)
+end
+
+local function isCtrlOrCmd()
+	return UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+		or UserInputService:IsKeyDown(Enum.KeyCode.LeftMeta)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightMeta)
+		or UserInputService:IsKeyDown(Enum.KeyCode.LeftSuper)
+		or UserInputService:IsKeyDown(Enum.KeyCode.RightSuper)
+end
+
+local function isShiftKey()
+	return UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+end
+
 local toolbar = plugin:CreateToolbar("UI Builder Pro")
 local toggleButton = toolbar:CreateButton("Open Editor", "UI Builderを開く", "rbxassetid://4483345998")
 
-local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 850, 800, 600, 450)
+local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 950, 800, 750, 450)
 local widget = plugin:CreateDockWidgetPluginGui("UIBuilderCanvas", widgetInfo)
 widget.Title = "UI Builder - Figma Pro"
-
 widget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local elementCount = 0
 
 -- --- 共通UIコンポーネント ---
 local function createTextBox(parent)
@@ -31,17 +57,14 @@ local function createColorInput(parent)
 	container.Size = UDim2.new(1, 0, 1, 0)
 	container.BackgroundTransparency = 1
 	container.Parent = parent
-
 	local topRow = Instance.new("Frame")
 	topRow.Size = UDim2.new(1, 0, 0, 28)
 	topRow.BackgroundTransparency = 1
 	topRow.Parent = container
-
 	local layout = Instance.new("UIListLayout", topRow)
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.Padding = UDim.new(0, 8)
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-
 	local colorChip = Instance.new("TextButton")
 	colorChip.Size = UDim2.new(0, 28, 0, 28)
 	colorChip.Text = ""
@@ -49,21 +72,17 @@ local function createColorInput(parent)
 	colorChip.Parent = topRow
 	Instance.new("UICorner", colorChip).CornerRadius = UDim.new(0, 4)
 	Instance.new("UIStroke", colorChip).Color = Color3.fromRGB(60, 60, 60)
-
 	local hexBox = createTextBox(topRow)
 	hexBox.Size = UDim2.new(0, 80, 1, 0)
 	hexBox.PlaceholderText = "#FFFFFF"
-
 	local presetRow = Instance.new("Frame")
 	presetRow.Size = UDim2.new(1, 0, 0, 20)
 	presetRow.Position = UDim2.new(0, 0, 0, 35)
 	presetRow.BackgroundTransparency = 1
 	presetRow.Parent = container
-
 	local pLayout = Instance.new("UIListLayout", presetRow)
 	pLayout.FillDirection = Enum.FillDirection.Horizontal
 	pLayout.Padding = UDim.new(0, 6)
-
 	local presetColors = {
 		Color3.fromRGB(255, 255, 255),
 		Color3.fromRGB(180, 180, 180),
@@ -74,7 +93,6 @@ local function createColorInput(parent)
 		Color3.fromRGB(241, 196, 15),
 		Color3.fromRGB(155, 89, 182),
 	}
-
 	local presetBtns = {}
 	for _, c in ipairs(presetColors) do
 		local btn = Instance.new("TextButton")
@@ -86,7 +104,6 @@ local function createColorInput(parent)
 		Instance.new("UIStroke", btn).Color = Color3.fromRGB(80, 80, 80)
 		table.insert(presetBtns, btn)
 	end
-
 	return hexBox, colorChip, presetBtns
 end
 
@@ -98,7 +115,6 @@ local function createPropertyBlock(titleText, parent, contentHeight)
 	block.BackgroundTransparency = 1
 	block.LayoutOrder = layoutOrder
 	block.Parent = parent
-
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, 0, 0, 20)
 	label.BackgroundTransparency = 1
@@ -108,13 +124,11 @@ local function createPropertyBlock(titleText, parent, contentHeight)
 	label.TextSize = 10
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = block
-
 	local contentArea = Instance.new("Frame")
 	contentArea.Size = UDim2.new(1, 0, 0, contentHeight)
 	contentArea.Position = UDim2.new(0, 0, 0, 20)
 	contentArea.BackgroundTransparency = 1
 	contentArea.Parent = block
-
 	return block, contentArea
 end
 
@@ -144,7 +158,6 @@ topBar.Size = UDim2.new(1, 0, 0, 50)
 topBar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 topBar.BorderSizePixel = 0
 topBar.Parent = background
-
 local topLayout = Instance.new("UIListLayout", topBar)
 topLayout.FillDirection = Enum.FillDirection.Horizontal
 topLayout.Padding = UDim.new(0, 6)
@@ -166,18 +179,13 @@ end
 local btnFrame = createToolButton("＋ 四角", Color3.fromRGB(0, 120, 215), 65)
 local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113), 65)
 local btnButton = createToolButton("＋ Btn", Color3.fromRGB(155, 89, 182), 60)
-
-local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 65)
-
--- ★ 新機能：グループ化ボタン
+local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 75)
 local btnGroup = createToolButton("📦 グループ", Color3.fromRGB(155, 89, 182), 80)
 local btnUngroup = createToolButton("💥 解除", Color3.fromRGB(155, 89, 182), 60)
-
 local btnDuplicate = createToolButton("👯", Color3.fromRGB(80, 80, 80), 30)
 local btnDelete = createToolButton("🗑️", Color3.fromRGB(231, 76, 60), 30)
 local btnUndo = createToolButton("↩️", Color3.fromRGB(60, 60, 60), 30)
 local btnRedo = createToolButton("↪️", Color3.fromRGB(60, 60, 60), 30)
-
 local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34), 65)
 
 local mainArea = Instance.new("Frame", background)
@@ -185,8 +193,31 @@ mainArea.Size = UDim2.new(1, 0, 1, -50)
 mainArea.Position = UDim2.new(0, 0, 0, 50)
 mainArea.BackgroundTransparency = 1
 
+-- ==========================================
+-- ★ レイヤーパネル (左側) の構築 ★
+-- ==========================================
+local layerPanel = Instance.new("ScrollingFrame", mainArea)
+layerPanel.Size = UDim2.new(0, 200, 1, 0)
+layerPanel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+layerPanel.BorderSizePixel = 0
+layerPanel.ScrollBarThickness = 2
+local layerLayout = Instance.new("UIListLayout", layerPanel)
+layerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+local layerTitle = Instance.new("TextLabel", layerPanel)
+layerTitle.Size = UDim2.new(1, 0, 0, 30)
+layerTitle.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+layerTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+layerTitle.Text = " LAYERS (レイヤー)"
+layerTitle.Font = Enum.Font.BuilderSansBold
+layerTitle.TextSize = 12
+layerTitle.TextXAlignment = Enum.TextXAlignment.Left
+layerTitle.LayoutOrder = -1
+local UIPaddingLayer = Instance.new("UIPadding", layerTitle)
+UIPaddingLayer.PaddingLeft = UDim.new(0, 10)
+
 local canvasArea = Instance.new("Frame", mainArea)
-canvasArea.Size = UDim2.new(1, -260, 1, 0)
+canvasArea.Size = UDim2.new(1, -460, 1, 0)
+canvasArea.Position = UDim2.new(0, 200, 0, 0)
 canvasArea.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 canvasArea.BorderSizePixel = 0
 canvasArea.ClipsDescendants = true
@@ -198,7 +229,6 @@ propertyPanel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 propertyPanel.BorderSizePixel = 0
 propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 1350)
 propertyPanel.ScrollBarThickness = 2
-
 local propLayout = Instance.new("UIListLayout", propertyPanel)
 propLayout.Padding = UDim.new(0, 15)
 propLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -217,10 +247,9 @@ propTitle.TextXAlignment = Enum.TextXAlignment.Left
 propTitle.LayoutOrder = 0
 
 -- ==========================================
--- ★ ALIGNMENT（自動整列ツール） ★
+-- ★ プロパティ項目の構築 ★
 -- ==========================================
 local blockAlign, areaAlign = createPropertyBlock("ALIGNMENT (ALIGN & DISTRIBUTE)", propertyPanel, 55)
-
 local function createAlignBtn(text, parent, pos)
 	local b = Instance.new("TextButton", parent)
 	b.Size = UDim2.new(0.31, 0, 1, 0)
@@ -233,7 +262,6 @@ local function createAlignBtn(text, parent, pos)
 	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
 	return b
 end
-
 local alignRow1 = Instance.new("Frame", areaAlign)
 alignRow1.Size = UDim2.new(1, 0, 0, 24)
 alignRow1.BackgroundTransparency = 1
@@ -248,10 +276,8 @@ local btnAlignTop = createAlignBtn("上揃え", alignRow2, 0)
 local btnAlignCenterY = createAlignBtn("中央(縦)", alignRow2, 0.345)
 local btnAlignBottom = createAlignBtn("下揃え", alignRow2, 0.69)
 
--- --- プロパティ項目 ---
 local blockText, areaText = createPropertyBlock("CONTENT (TEXT)", propertyPanel, 28)
 local textEditBox = createTextBox(areaText)
-
 local blockFont, areaFont = createPropertyBlock("FONT FAMILY", propertyPanel, 28)
 local fontSelectBtn = Instance.new("TextButton", areaFont)
 fontSelectBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -260,20 +286,15 @@ fontSelectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 fontSelectBtn.Font = Enum.Font.BuilderSansBold
 fontSelectBtn.TextSize = 12
 Instance.new("UICorner", fontSelectBtn).CornerRadius = UDim.new(0, 4)
-
 local blockFontSize, areaFontSize = createPropertyBlock("FONT SIZE (px)", propertyPanel, 28)
 local fontSizeBox = createTextBox(areaFontSize)
 fontSizeBox.PlaceholderText = "14"
-
 local blockBgColor, areaBgColor = createPropertyBlock("BACKGROUND COLOR (HEX)", propertyPanel, 55)
 local bgHex, bgChip, bgPresets = createColorInput(areaBgColor)
-
 local blockTxtColor, areaTxtColor = createPropertyBlock("TEXT COLOR (HEX)", propertyPanel, 55)
 local txtHex, txtChip, txtPresets = createColorInput(areaTxtColor)
-
 local blockOutline, areaOutline = createPropertyBlock("OUTLINE THICKNESS (px)", propertyPanel, 28)
 local outlineBox = createTextBox(areaOutline)
-
 local blockGradToggle, areaGradToggle = createPropertyBlock("GRADIENT MODE", propertyPanel, 28)
 local gradToggleBtn = Instance.new("TextButton", areaGradToggle)
 gradToggleBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -282,20 +303,16 @@ gradToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 gradToggleBtn.Text = "OFF"
 gradToggleBtn.Font = Enum.Font.BuilderSansBold
 Instance.new("UICorner", gradToggleBtn).CornerRadius = UDim.new(0, 4)
-
 local blockGradColor, areaGradColor = createPropertyBlock("GRADIENT COLOR 2 (HEX)", propertyPanel, 55)
 local gr2Hex, gr2Chip, gr2Presets = createColorInput(areaGradColor)
-
 local blockCorner, areaCorner = createPropertyBlock("CORNER RADIUS (px)", propertyPanel, 28)
 local cornerEditBox = createTextBox(areaCorner)
-
 local blockSize, areaSize = createPropertyBlock("SIZE (W, H)", propertyPanel, 28)
 local sizeX = createTextBox(areaSize)
 sizeX.Size = UDim2.new(0.48, 0, 1, 0)
 local sizeY = createTextBox(areaSize)
 sizeY.Size = UDim2.new(0.48, 0, 1, 0)
 sizeY.Position = UDim2.new(0.52, 0, 0, 0)
-
 local blockPadding, areaPadding = createPropertyBlock("PADDING (T, B, L, R)", propertyPanel, 28)
 Instance.new("UIListLayout", areaPadding).FillDirection = Enum.FillDirection.Horizontal
 Instance.new("UIListLayout", areaPadding).Padding = UDim.new(0, 5)
@@ -305,7 +322,6 @@ local function createPadBox()
 	return b
 end
 local padT, padB, padL, padR = createPadBox(), createPadBox(), createPadBox(), createPadBox()
-
 local blockZIndex, areaZIndex = createPropertyBlock("Z-INDEX (LAYER ORDER)", propertyPanel, 28)
 local zIndexContainer = Instance.new("Frame", areaZIndex)
 zIndexContainer.Size = UDim2.new(1, 0, 1, 0)
@@ -331,7 +347,6 @@ btnZUp.Text = "+1 (手前)"
 btnZUp.Font = Enum.Font.BuilderSansBold
 btnZUp.TextSize = 10
 Instance.new("UICorner", btnZUp).CornerRadius = UDim.new(0, 4)
-
 local blockAuto, areaAuto = createPropertyBlock("AUTO LAYOUT (GROW)", propertyPanel, 28)
 local function createAutoBtn(text, pos)
 	local b = Instance.new("TextButton", areaAuto)
@@ -354,7 +369,6 @@ local btnNone, btnX, btnY, btnXY =
 local snapSizes = { 1, 5, 10, 20 }
 local currentSnapIndex = 3
 local snapSize = snapSizes[currentSnapIndex]
-
 btnSnap.MouseButton1Click:Connect(function()
 	currentSnapIndex = currentSnapIndex + 1
 	if currentSnapIndex > #snapSizes then
@@ -398,6 +412,9 @@ function saveState()
 	else
 		historyIndex = historyIndex + 1
 	end
+	if _G.updateLayerPanel then
+		_G.updateLayerPanel()
+	end
 end
 
 local function loadState(index)
@@ -436,7 +453,6 @@ local function redoState()
 		loadState(historyIndex)
 	end
 end
-
 btnUndo.MouseButton1Click:Connect(undoState)
 btnRedo.MouseButton1Click:Connect(redoState)
 
@@ -573,9 +589,7 @@ local prevStroke = Instance.new("UIStroke", colorPreview)
 prevStroke.Color = Color3.fromRGB(60, 60, 60)
 
 local currentHue, currentSat, currentVal = 0, 1, 1
-local activeColorCallback = nil
-local pickerOriginalColor = nil
-
+local activeColorCallback, pickerOriginalColor = nil, nil
 local function updateColorPickerVisuals()
 	local bgHsv = Color3.fromHSV(currentHue, 1, 1)
 	if svArea.BackgroundColor3 ~= bgHsv then
@@ -597,7 +611,6 @@ local function updateColorPickerVisuals()
 		activeColorCallback(finalColor)
 	end
 end
-
 local function setupSlider(area, isHue)
 	area.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -636,12 +649,10 @@ local function setupSlider(area, isHue)
 end
 setupSlider(svArea, false)
 setupSlider(hueArea, true)
-
 local function closePicker()
 	pickerBlocker.Visible = false
 	colorPickerBase.Visible = false
 end
-
 local function openCustomPicker(initialColor, callback)
 	activeColorCallback = callback
 	pickerOriginalColor = initialColor
@@ -650,7 +661,6 @@ local function openCustomPicker(initialColor, callback)
 	pickerBlocker.Visible = true
 	colorPickerBase.Visible = true
 end
-
 local function cancelPicker()
 	if activeColorCallback and pickerOriginalColor then
 		activeColorCallback(pickerOriginalColor)
@@ -665,11 +675,12 @@ confirmBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- ★ 複数選択（Multi-Selection）とハイライト管理 ★
+-- ★ 複数選択・ハイライト管理 ★
 -- ==========================================
 local selectedElements = {}
 local highlightFrames = {}
 local isResizing = false
+_G.isRenamingLayer = false
 
 local selectionHighlight = Instance.new("Frame")
 selectionHighlight.Name = "SelectionHighlight"
@@ -678,12 +689,10 @@ selectionHighlight.Active = false
 selectionHighlight.ZIndex = 9999
 selectionHighlight.Visible = false
 selectionHighlight.Parent = canvasArea
-
 local shStroke = Instance.new("UIStroke", selectionHighlight)
 shStroke.Color = Color3.fromRGB(0, 162, 255)
 shStroke.Thickness = 2
 shStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
 local shCorner = Instance.new("UICorner", selectionHighlight)
 
 local resizeHandles = {}
@@ -697,7 +706,6 @@ local handleDirs = {
 	Bottom = { x = 0, y = 1 },
 	BottomRight = { x = 1, y = 1 },
 }
-
 for name, dir in pairs(handleDirs) do
 	local handle = Instance.new("TextButton")
 	handle.Name = name
@@ -711,7 +719,6 @@ for name, dir in pairs(handleDirs) do
 	local hStroke = Instance.new("UIStroke", handle)
 	hStroke.Color = Color3.fromRGB(0, 120, 215)
 	hStroke.Thickness = 1
-
 	if name == "TopLeft" then
 		handle.Position = UDim2.new(0, 0, 0, 0)
 	elseif name == "Top" then
@@ -729,17 +736,15 @@ for name, dir in pairs(handleDirs) do
 	elseif name == "BottomRight" then
 		handle.Position = UDim2.new(1, 0, 1, 0)
 	end
-
 	handle.Parent = selectionHighlight
 	resizeHandles[name] = { btn = handle, dir = dir }
 end
 
-local function refreshHighlights()
+function _G.refreshHighlights()
 	for _, h in ipairs(highlightFrames) do
 		h.frame:Destroy()
 	end
 	highlightFrames = {}
-
 	for _, el in ipairs(selectedElements) do
 		local hl = Instance.new("Frame")
 		hl.Name = "MultiHighlight"
@@ -756,21 +761,27 @@ local function refreshHighlights()
 end
 
 RunService.Heartbeat:Connect(function()
+	local canvasAbsPos = canvasArea.AbsolutePosition
 	for _, hd in ipairs(highlightFrames) do
 		if hd.target and hd.target.Parent then
 			hd.frame.Size = UDim2.new(0, hd.target.AbsoluteSize.X, 0, hd.target.AbsoluteSize.Y)
-			hd.frame.Position = hd.target.Position
+			hd.frame.Position = UDim2.new(
+				0,
+				hd.target.AbsolutePosition.X - canvasAbsPos.X,
+				0,
+				hd.target.AbsolutePosition.Y - canvasAbsPos.Y
+			)
 			local c = hd.target:FindFirstChildOfClass("UICorner")
 			hd.corner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
 		end
 	end
-
 	if #selectedElements == 1 then
 		local target = selectedElements[1]
 		selectionHighlight.Visible = true
 		if not isResizing then
 			selectionHighlight.Size = UDim2.new(0, target.AbsoluteSize.X, 0, target.AbsoluteSize.Y)
-			selectionHighlight.Position = target.Position
+			selectionHighlight.Position =
+				UDim2.new(0, target.AbsolutePosition.X - canvasAbsPos.X, 0, target.AbsolutePosition.Y - canvasAbsPos.Y)
 			local c = target:FindFirstChildOfClass("UICorner")
 			shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
 		end
@@ -787,23 +798,19 @@ for name, data in pairs(resizeHandles) do
 				return
 			end
 			local targetElement = selectedElements[1]
-
 			isResizing = true
 			local startMouse = widget:GetRelativeMousePosition()
 			local startSize = targetElement.Size
 			local startPos = targetElement.Position
 			local dir = data.dir
-
 			if resizeLoopConn then
 				resizeLoopConn:Disconnect()
 			end
-
 			resizeLoopConn = RunService.Heartbeat:Connect(function()
 				if isResizing and targetElement then
 					local currentMouse = widget:GetRelativeMousePosition()
 					local deltaX = currentMouse.X - startMouse.X
 					local deltaY = currentMouse.Y - startMouse.Y
-
 					local newSizeX = startSize.X.Offset
 					local newSizeY = startSize.Y.Offset
 					local newPosX = startPos.X.Offset
@@ -819,7 +826,6 @@ for name, data in pairs(resizeHandles) do
 						newSizeX = math.max(10, startPos.X.Offset + startSize.X.Offset - snappedEdgeX)
 						newPosX = startPos.X.Offset + startSize.X.Offset - newSizeX
 					end
-
 					if dir.y == 1 then
 						local targetEdgeY = startPos.Y.Offset + startSize.Y.Offset + deltaY
 						local snappedEdgeY = math.floor(targetEdgeY / snapSize + 0.5) * snapSize
@@ -833,16 +839,19 @@ for name, data in pairs(resizeHandles) do
 
 					targetElement.Size = UDim2.new(startSize.X.Scale, newSizeX, startSize.Y.Scale, newSizeY)
 					targetElement.Position = UDim2.new(startPos.X.Scale, newPosX, startPos.Y.Scale, newPosY)
-
-					selectionHighlight.Size = UDim2.new(0, newSizeX, 0, newSizeY)
-					selectionHighlight.Position = UDim2.new(startPos.X.Scale, newPosX, startPos.Y.Scale, newPosY)
-
+					selectionHighlight.Size =
+						UDim2.new(0, targetElement.AbsoluteSize.X, 0, targetElement.AbsoluteSize.Y)
+					selectionHighlight.Position = UDim2.new(
+						0,
+						targetElement.AbsolutePosition.X - canvasArea.AbsolutePosition.X,
+						0,
+						targetElement.AbsolutePosition.Y - canvasArea.AbsolutePosition.Y
+					)
 					if _G.updatePanelVisuals then
 						_G.updatePanelVisuals(newSizeX, newSizeY)
 					end
 				end
 			end)
-
 			local endConn
 			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
@@ -860,7 +869,141 @@ for name, data in pairs(resizeHandles) do
 	end)
 end
 
--- --- プロパティパネル管理 ---
+function _G.updateLayerPanel()
+	if _G.isRenamingLayer then
+		return
+	end
+	for _, child in ipairs(layerPanel:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	local orderCounter = 0
+	local function renderElement(el, depth)
+		orderCounter = orderCounter + 1
+		local isSelected = table.find(selectedElements, el) ~= nil
+		local item = Instance.new("Frame")
+		item.Size = UDim2.new(1, 0, 0, 26)
+		item.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+		item.BackgroundTransparency = isSelected and 0.5 or 1
+		item.BorderSizePixel = 0
+		item.LayoutOrder = orderCounter
+		item.Parent = layerPanel
+
+		local icon = Instance.new("TextLabel", item)
+		icon.Size = UDim2.new(0, 20, 1, 0)
+		icon.Position = UDim2.new(0, depth * 15 + 5, 0, 0)
+		icon.BackgroundTransparency = 1
+		icon.TextColor3 = Color3.fromRGB(150, 150, 150)
+		if el.Name:match("Group") then
+			icon.Text = "📦"
+		elseif el:IsA("TextLabel") then
+			icon.Text = "T"
+		elseif el:IsA("TextButton") then
+			icon.Text = "B"
+		else
+			icon.Text = "🔲"
+		end
+		icon.Font = Enum.Font.BuilderSans
+		icon.TextSize = 12
+
+		local nameBox = Instance.new("TextBox", item)
+		nameBox.Size = UDim2.new(1, -(depth * 15 + 30), 1, 0)
+		nameBox.Position = UDim2.new(0, depth * 15 + 25, 0, 0)
+		nameBox.BackgroundTransparency = 1
+		nameBox.TextColor3 = isSelected and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(200, 200, 200)
+		nameBox.Text = el.Name
+		nameBox.Font = Enum.Font.BuilderSans
+		nameBox.TextSize = 12
+		nameBox.TextXAlignment = Enum.TextXAlignment.Left
+		nameBox.ClearTextOnFocus = false
+		nameBox.Focused:Connect(function()
+			_G.isRenamingLayer = true
+		end)
+		nameBox.FocusLost:Connect(function()
+			_G.isRenamingLayer = false
+			if nameBox.Text ~= "" then
+				el.Name = nameBox.Text
+				saveState()
+			else
+				nameBox.Text = el.Name
+			end
+			_G.updateLayerPanel()
+		end)
+
+		local clickBtn = Instance.new("TextButton", item)
+		clickBtn.Size = UDim2.new(1, 0, 1, 0)
+		clickBtn.BackgroundTransparency = 1
+		clickBtn.Text = ""
+		clickBtn.ZIndex = 2
+		local lastClick = 0
+		clickBtn.InputBegan:Connect(function(input)
+			-- ★ Macの Cmd+クリック は MouseButton2 になるため両方許可！
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.MouseButton2
+			then
+				local now = tick()
+				if now - lastClick < 0.3 then
+					nameBox:CaptureFocus()
+				else
+					if isMultiSelectKey() then
+						local idx = table.find(selectedElements, el)
+						if idx then
+							table.remove(selectedElements, idx)
+						else
+							table.insert(selectedElements, el)
+						end
+						_G.refreshHighlights()
+						_G.updatePanel()
+					else
+						_G.selectElement(el)
+					end
+				end
+				lastClick = now
+			end
+		end)
+
+		local children = {}
+		for _, c in ipairs(el:GetChildren()) do
+			if
+				c:IsA("GuiObject")
+				and not c.Name:match("Highlight")
+				and c.Name ~= "ClickCatcher"
+				and c.Name ~= "MarqueeBox"
+			then
+				table.insert(children, c)
+			end
+		end
+		table.sort(children, function(a, b)
+			return a.ZIndex > b.ZIndex
+		end)
+		for _, c in ipairs(children) do
+			renderElement(c, depth + 1)
+		end
+	end
+
+	local rootElements = {}
+	for _, c in ipairs(canvasArea:GetChildren()) do
+		if
+			c:IsA("GuiObject")
+			and not c.Name:match("Highlight")
+			and c.Name ~= "ClickCatcher"
+			and c.Name ~= "MarqueeBox"
+		then
+			table.insert(rootElements, c)
+		end
+	end
+	table.sort(rootElements, function(a, b)
+		return a.ZIndex > b.ZIndex
+	end)
+	for _, c in ipairs(rootElements) do
+		renderElement(c, 0)
+	end
+	layerPanel.CanvasSize = UDim2.new(0, 0, 0, orderCounter * 26 + 30)
+end
+
 local allBlocks = {
 	blockAlign,
 	blockText,
@@ -877,7 +1020,6 @@ local allBlocks = {
 	blockZIndex,
 	blockAuto,
 }
-
 function _G.updatePanelVisuals(sx, sy)
 	if sizeX and sizeY then
 		sizeX.Text = tostring(math.floor(sx))
@@ -885,7 +1027,10 @@ function _G.updatePanelVisuals(sx, sy)
 	end
 end
 
-local function updatePanel()
+function _G.updatePanel()
+	if _G.updateLayerPanel then
+		_G.updateLayerPanel()
+	end
 	if #selectedElements == 0 then
 		propTitle.Text = "No Selection"
 		for _, block in ipairs(allBlocks) do
@@ -905,7 +1050,6 @@ local function updatePanel()
 	if not target or not target.Parent then
 		return
 	end
-
 	for _, block in ipairs(allBlocks) do
 		block.Visible = true
 	end
@@ -916,7 +1060,6 @@ local function updatePanel()
 	blockFont.Visible = isText
 	blockFontSize.Visible = isText
 	blockTxtColor.Visible = isText
-
 	if isText then
 		textEditBox.Text = target.Text
 		fontSelectBtn.Text = target.Font.Name
@@ -924,12 +1067,10 @@ local function updatePanel()
 		txtHex.Text = toHex(target.TextColor3)
 		txtChip.BackgroundColor3 = target.TextColor3
 	end
-
 	bgHex.Text = toHex(target.BackgroundColor3)
 	bgChip.BackgroundColor3 = target.BackgroundColor3
 	local stroke = target:FindFirstChild("DesignStroke")
 	outlineBox.Text = stroke and tostring(stroke.Thickness) or "0"
-
 	local grad = target:FindFirstChildOfClass("UIGradient")
 	gradToggleBtn.Text = grad and "ON" or "OFF"
 	gradToggleBtn.BackgroundColor3 = grad and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(50, 50, 50)
@@ -939,7 +1080,6 @@ local function updatePanel()
 		gr2Hex.Text = toHex(color2)
 		gr2Chip.BackgroundColor3 = color2
 	end
-
 	cornerEditBox.Text = target:FindFirstChildOfClass("UICorner")
 			and tostring(target:FindFirstChildOfClass("UICorner").CornerRadius.Offset)
 		or "0"
@@ -947,7 +1087,6 @@ local function updatePanel()
 		sizeX.Text, sizeY.Text =
 			tostring(math.floor(target.AbsoluteSize.X)), tostring(math.floor(target.AbsoluteSize.Y))
 	end
-
 	local pad = target:FindFirstChildOfClass("UIPadding")
 	if pad then
 		padT.Text, padB.Text, padL.Text, padR.Text =
@@ -972,32 +1111,26 @@ end
 
 function _G.clearSelection()
 	selectedElements = {}
-	refreshHighlights()
-	updatePanel()
+	_G.refreshHighlights()
+	_G.updatePanel()
 end
 function _G.selectElement(element)
 	selectedElements = { element }
-	refreshHighlights()
-	updatePanel()
+	_G.refreshHighlights()
+	_G.updatePanel()
 end
 
--- ==========================================
--- ★ ALIGNMENT（自動整列の実行ロジック） ★
--- ==========================================
 local function alignElements(mode)
 	if #selectedElements == 0 then
 		return
 	end
-
 	local targetMinX, targetMinY = math.huge, math.huge
 	local targetMaxX, targetMaxY = -math.huge, -math.huge
 	local canvasAbsPos = canvasArea.AbsolutePosition
-
 	if #selectedElements == 1 then
 		targetMinX, targetMinY = 0, 0
 		targetMaxX, targetMaxY = canvasArea.AbsoluteSize.X, canvasArea.AbsoluteSize.Y
 	else
-		-- 選択要素すべての絶対座標ベースでバウンディングボックスを計算
 		for _, el in ipairs(selectedElements) do
 			local ex = el.AbsolutePosition.X - canvasAbsPos.X
 			local ey = el.AbsolutePosition.Y - canvasAbsPos.Y
@@ -1008,15 +1141,11 @@ local function alignElements(mode)
 			targetMaxY = math.max(targetMaxY, ey + eh)
 		end
 	end
-
 	for _, el in ipairs(selectedElements) do
 		local ew, eh = el.AbsoluteSize.X, el.AbsoluteSize.Y
 		local currentAbsX = el.AbsolutePosition.X - canvasAbsPos.X
 		local currentAbsY = el.AbsolutePosition.Y - canvasAbsPos.Y
-
-		local newX = currentAbsX
-		local newY = currentAbsY
-
+		local newX, newY = currentAbsX, currentAbsY
 		if mode == "Left" then
 			newX = targetMinX
 		elseif mode == "CenterX" then
@@ -1030,11 +1159,7 @@ local function alignElements(mode)
 		elseif mode == "Bottom" then
 			newY = targetMaxY - eh
 		end
-
-		-- 親がGroupフレームなどでも正しく配置できるよう、AbsolutePositionの差分を使ってPositionを更新
-		local deltaX = newX - currentAbsX
-		local deltaY = newY - currentAbsY
-
+		local deltaX, deltaY = newX - currentAbsX, newY - currentAbsY
 		el.Position = UDim2.new(
 			el.Position.X.Scale,
 			math.floor(el.Position.X.Offset + deltaX),
@@ -1042,8 +1167,7 @@ local function alignElements(mode)
 			math.floor(el.Position.Y.Offset + deltaY)
 		)
 	end
-
-	updatePanel()
+	_G.updatePanel()
 	saveState()
 end
 
@@ -1066,19 +1190,13 @@ btnAlignBottom.MouseButton1Click:Connect(function()
 	alignElements("Bottom")
 end)
 
--- ==========================================
--- ★ 新機能：グループ化 (Grouping) ★
--- ==========================================
 local function groupSelected()
 	if #selectedElements == 0 then
 		return
 	end
-
 	local minX, minY = math.huge, math.huge
 	local maxX, maxY = -math.huge, -math.huge
 	local canvasAbsPos = canvasArea.AbsolutePosition
-
-	-- 選択要素の絶対座標バウンディングボックスを計算
 	for _, el in ipairs(selectedElements) do
 		local ax, ay = el.AbsolutePosition.X, el.AbsolutePosition.Y
 		local sx, sy = el.AbsoluteSize.X, el.AbsoluteSize.Y
@@ -1087,14 +1205,12 @@ local function groupSelected()
 		maxX = math.max(maxX, ax + sx)
 		maxY = math.max(maxY, ay + sy)
 	end
-
-	-- グループ用の透明フレームを作成
+	elementCount = elementCount + 1
 	local groupFrame = Instance.new("Frame")
-	groupFrame.Name = "Group"
+	groupFrame.Name = "Group " .. elementCount
 	groupFrame.BackgroundTransparency = 1
 	groupFrame.Position = UDim2.new(0, minX - canvasAbsPos.X, 0, minY - canvasAbsPos.Y)
 	groupFrame.Size = UDim2.new(0, maxX - minX, 0, maxY - minY)
-
 	local highestZ = 0
 	for _, child in ipairs(canvasArea:GetChildren()) do
 		if
@@ -1110,13 +1226,10 @@ local function groupSelected()
 	end
 	groupFrame.ZIndex = highestZ + 1
 	groupFrame.Parent = canvasArea
-
-	-- 要素をグループの中へ移動し、座標を再計算
 	for _, el in ipairs(selectedElements) do
 		el.Position = UDim2.new(0, el.AbsolutePosition.X - minX, 0, el.AbsolutePosition.Y - minY)
 		el.Parent = groupFrame
 	end
-
 	_G.selectElement(groupFrame)
 	saveState()
 end
@@ -1125,20 +1238,16 @@ local function ungroupSelected()
 	if #selectedElements == 0 then
 		return
 	end
-
 	local newSelection = {}
 	local changed = false
 	local canvasAbsPos = canvasArea.AbsolutePosition
-
 	for _, group in ipairs(selectedElements) do
-		if group:IsA("Frame") then
+		if group:IsA("Frame") and group.Name:match("Group") then
 			local children = group:GetChildren()
 			local hasMovableChildren = false
-
 			for _, child in ipairs(children) do
 				if child:IsA("GuiObject") and not child.Name:match("Highlight") then
 					hasMovableChildren = true
-					-- 座標をキャンバス基準に戻す
 					child.Position = UDim2.new(
 						0,
 						child.AbsolutePosition.X - canvasAbsPos.X,
@@ -1151,7 +1260,6 @@ local function ungroupSelected()
 					changed = true
 				end
 			end
-
 			if hasMovableChildren then
 				group:Destroy()
 			else
@@ -1161,20 +1269,18 @@ local function ungroupSelected()
 			table.insert(newSelection, group)
 		end
 	end
-
 	if changed then
 		selectedElements = newSelection
-		refreshHighlights()
-		updatePanel()
+		_G.refreshHighlights()
+		_G.updatePanel()
 		saveState()
 	end
 end
-
 btnGroup.MouseButton1Click:Connect(groupSelected)
 btnUngroup.MouseButton1Click:Connect(ungroupSelected)
 
 -- ==========================================
--- ★ ドラッグ囲み選択 (Marquee) と 複数ドラッグ ★
+-- ★ ドリルダウン選択 (ダブルクリック) と ドラッグ管理 ★
 -- ==========================================
 local clickCatcher = Instance.new("TextButton")
 clickCatcher.Name = "ClickCatcher"
@@ -1183,7 +1289,6 @@ clickCatcher.BackgroundTransparency = 1
 clickCatcher.Text = ""
 clickCatcher.ZIndex = 9998
 clickCatcher.Parent = canvasArea
-
 local marqueeBox = Instance.new("Frame")
 marqueeBox.Name = "MarqueeBox"
 marqueeBox.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
@@ -1195,45 +1300,91 @@ marqueeBox.Visible = false
 marqueeBox.Parent = canvasArea
 
 local dragLoopConn = nil
+local lastClickTime = 0
+local lastClickPos = Vector2.new()
+
+local function findHitElement(elementsList, mousePos)
+	local topElement = nil
+	local highestZIndex = -math.huge
+	local highestChildIndex = -1
+	for i, child in ipairs(elementsList) do
+		if
+			child:IsA("GuiObject")
+			and not child.Name:match("Highlight")
+			and child.Name ~= "ClickCatcher"
+			and child.Name ~= "MarqueeBox"
+		then
+			local pos = child.AbsolutePosition
+			local size = child.AbsoluteSize
+			if
+				mousePos.X >= pos.X
+				and mousePos.X <= (pos.X + size.X)
+				and mousePos.Y >= pos.Y
+				and mousePos.Y <= (pos.Y + size.Y)
+			then
+				if child.ZIndex > highestZIndex or (child.ZIndex == highestZIndex and i > highestChildIndex) then
+					topElement = child
+					highestZIndex = child.ZIndex
+					highestChildIndex = i
+				end
+			end
+		end
+	end
+	return topElement
+end
 
 clickCatcher.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+	-- ★ Macの Cmd+クリック は MouseButton2 になるため両方許可！
+	if
+		input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.MouseButton2
+	then
 		if pickerBlocker.Visible or isResizing then
 			return
 		end
 
 		local mousePos = input.Position
-		local topElement = nil
-		local highestZIndex = -math.huge
-		local highestChildIndex = -1
+		local now = tick()
+		local isDoubleClick = (now - lastClickTime < 0.3)
+			and ((Vector2.new(mousePos.X, mousePos.Y) - lastClickPos).Magnitude < 10)
+		lastClickTime = now
+		lastClickPos = Vector2.new(mousePos.X, mousePos.Y)
 
-		local children = canvasArea:GetChildren()
-		for i, child in ipairs(children) do
-			if
-				child:IsA("GuiObject")
-				and not child.Name:match("Highlight")
-				and child.Name ~= "ClickCatcher"
-				and child.Name ~= "MarqueeBox"
-			then
-				local pos = child.AbsolutePosition
-				local size = child.AbsoluteSize
-				if
-					mousePos.X >= pos.X
-					and mousePos.X <= (pos.X + size.X)
-					and mousePos.Y >= pos.Y
-					and mousePos.Y <= (pos.Y + size.Y)
-				then
-					if child.ZIndex > highestZIndex or (child.ZIndex == highestZIndex and i > highestChildIndex) then
-						topElement = child
-						highestZIndex = child.ZIndex
-						highestChildIndex = i
-					end
-				end
+		local targetRoots = canvasArea:GetChildren()
+		if #selectedElements == 1 and selectedElements[1].Parent ~= canvasArea then
+			targetRoots = selectedElements[1].Parent:GetChildren()
+		end
+
+		local topElement = findHitElement(targetRoots, mousePos)
+
+		if
+			isDoubleClick
+			and #selectedElements == 1
+			and selectedElements[1]:IsA("Frame")
+			and selectedElements[1].Name:match("Group")
+		then
+			local childHit = findHitElement(selectedElements[1]:GetChildren(), mousePos)
+			if childHit then
+				topElement = childHit
 			end
 		end
 
+		if not topElement and targetRoots ~= canvasArea:GetChildren() then
+			topElement = findHitElement(canvasArea:GetChildren(), mousePos)
+		end
+
 		if topElement then
-			if not table.find(selectedElements, topElement) then
+			-- ★ 確実に全モディファイアを判定
+			if isMultiSelectKey() then
+				local idx = table.find(selectedElements, topElement)
+				if idx then
+					table.remove(selectedElements, idx)
+				else
+					table.insert(selectedElements, topElement)
+				end
+				_G.refreshHighlights()
+				_G.updatePanel()
+			elseif not table.find(selectedElements, topElement) then
 				_G.selectElement(topElement)
 			end
 
@@ -1242,17 +1393,16 @@ clickCatcher.InputBegan:Connect(function(input)
 			for _, el in ipairs(selectedElements) do
 				startOffsets[el] = el.Position
 			end
-
 			local dragging = true
 			if dragLoopConn then
 				dragLoopConn:Disconnect()
 			end
+
 			dragLoopConn = RunService.Heartbeat:Connect(function()
 				if dragging then
 					local currentMouse = widget:GetRelativeMousePosition()
 					local deltaX = currentMouse.X - dragStartMouseWidget.X
 					local deltaY = currentMouse.Y - dragStartMouseWidget.Y
-
 					for _, el in ipairs(selectedElements) do
 						local startPos = startOffsets[el]
 						if startPos then
@@ -1264,7 +1414,7 @@ clickCatcher.InputBegan:Connect(function(input)
 						end
 					end
 					if #selectedElements == 1 then
-						updatePanel()
+						_G.updatePanel()
 					end
 				end
 			end)
@@ -1276,7 +1426,6 @@ clickCatcher.InputBegan:Connect(function(input)
 					if dragLoopConn then
 						dragLoopConn:Disconnect()
 					end
-
 					local moved = false
 					for _, el in ipairs(selectedElements) do
 						if startOffsets[el] and el.Position ~= startOffsets[el] then
@@ -1287,20 +1436,20 @@ clickCatcher.InputBegan:Connect(function(input)
 					if moved then
 						saveState()
 					end
-
 					endConn:Disconnect()
 				end
 			end)
 		else
-			_G.clearSelection()
+			-- もし修飾キーを押しながら何もないところをクリックしたら、選択解除しない
+			if not isMultiSelectKey() then
+				_G.clearSelection()
+			end
 
 			marqueeBox.Visible = true
 			local startMouseWidget = widget:GetRelativeMousePosition()
 			local canvasAbsPos = canvasArea.AbsolutePosition
-
 			local localStartX = startMouseWidget.X - canvasAbsPos.X
 			local localStartY = startMouseWidget.Y - canvasAbsPos.Y
-
 			marqueeBox.Position = UDim2.new(0, localStartX, 0, localStartY)
 			marqueeBox.Size = UDim2.new(0, 0, 0, 0)
 
@@ -1313,17 +1462,10 @@ clickCatcher.InputBegan:Connect(function(input)
 					local currentMouseWidget = widget:GetRelativeMousePosition()
 					local curX = math.clamp(currentMouseWidget.X - canvasAbsPos.X, 0, canvasArea.AbsoluteSize.X)
 					local curY = math.clamp(currentMouseWidget.Y - canvasAbsPos.Y, 0, canvasArea.AbsoluteSize.Y)
-
 					local startX = math.clamp(localStartX, 0, canvasArea.AbsoluteSize.X)
 					local startY = math.clamp(localStartY, 0, canvasArea.AbsoluteSize.Y)
-
-					local minX = math.min(startX, curX)
-					local minY = math.min(startY, curY)
-					local width = math.abs(startX - curX)
-					local height = math.abs(startY - curY)
-
-					marqueeBox.Position = UDim2.new(0, minX, 0, minY)
-					marqueeBox.Size = UDim2.new(0, width, 0, height)
+					marqueeBox.Position = UDim2.new(0, math.min(startX, curX), 0, math.min(startY, curY))
+					marqueeBox.Size = UDim2.new(0, math.abs(startX - curX), 0, math.abs(startY - curY))
 				end
 			end)
 
@@ -1336,11 +1478,8 @@ clickCatcher.InputBegan:Connect(function(input)
 						dragLoopConn:Disconnect()
 					end
 					endConn:Disconnect()
-
-					local mPos = marqueeBox.AbsolutePosition
-					local mSize = marqueeBox.AbsoluteSize
-					local mRect = Rect.new(mPos, mPos + mSize)
-
+					local mRect =
+						Rect.new(marqueeBox.AbsolutePosition, marqueeBox.AbsolutePosition + marqueeBox.AbsoluteSize)
 					local newSelection = {}
 					for _, child in ipairs(canvasArea:GetChildren()) do
 						if
@@ -1349,10 +1488,7 @@ clickCatcher.InputBegan:Connect(function(input)
 							and child.Name ~= "ClickCatcher"
 							and child.Name ~= "MarqueeBox"
 						then
-							local cPos = child.AbsolutePosition
-							local cSize = child.AbsoluteSize
-							local cRect = Rect.new(cPos, cPos + cSize)
-
+							local cRect = Rect.new(child.AbsolutePosition, child.AbsolutePosition + child.AbsoluteSize)
 							if
 								mRect.Min.X < cRect.Max.X
 								and mRect.Max.X > cRect.Min.X
@@ -1363,19 +1499,25 @@ clickCatcher.InputBegan:Connect(function(input)
 							end
 						end
 					end
+					-- ★ ドラッグ選択時もShift/Cmdが押されていれば追加、そうでなければ置き換え
+					if isMultiSelectKey() then
+						for _, el in ipairs(newSelection) do
+							if not table.find(selectedElements, el) then
+								table.insert(selectedElements, el)
+							end
+						end
+					else
+						selectedElements = newSelection
+					end
 
-					selectedElements = newSelection
-					refreshHighlights()
-					updatePanel()
+					_G.refreshHighlights()
+					_G.updatePanel()
 				end
 			end)
 		end
 	end
 end)
 
--- ==========================================
--- ★ 削除・複製・ショートカット ★
--- ==========================================
 local function deleteSelected()
 	if #selectedElements > 0 then
 		for _, el in ipairs(selectedElements) do
@@ -1391,7 +1533,7 @@ local function duplicateSelected()
 		local newSelection = {}
 		for _, el in ipairs(selectedElements) do
 			local clone = el:Clone()
-			clone.Parent = canvasArea
+			clone.Parent = el.Parent
 			clone.Position = UDim2.new(
 				el.Position.X.Scale,
 				el.Position.X.Offset + 15,
@@ -1402,8 +1544,8 @@ local function duplicateSelected()
 			table.insert(newSelection, clone)
 		end
 		selectedElements = newSelection
-		refreshHighlights()
-		updatePanel()
+		_G.refreshHighlights()
+		_G.updatePanel()
 		saveState()
 	end
 end
@@ -1412,17 +1554,16 @@ local function updateZIndexDirect()
 	if #selectedElements == 1 then
 		selectedElements[1].ZIndex = tonumber(zIndexBox.Text) or selectedElements[1].ZIndex
 		task.wait(0.05)
-		updatePanel()
+		_G.updatePanel()
 		saveState()
 	end
 end
-
 local function moveZIndex(amount)
 	if #selectedElements > 0 then
 		for _, el in ipairs(selectedElements) do
 			el.ZIndex = el.ZIndex + amount
 		end
-		updatePanel()
+		_G.updatePanel()
 		saveState()
 	end
 end
@@ -1448,12 +1589,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		return
 	end
 
-	local ctrlPressed = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
-		or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
-		or UserInputService:IsKeyDown(Enum.KeyCode.LeftSuper)
-		or UserInputService:IsKeyDown(Enum.KeyCode.RightSuper)
-	local shiftPressed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-		or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+	-- ★ Macの Cmd/Ctrl/Shift 判定を確実に処理
+	local ctrlPressed = isCtrlOrCmd()
+	local shiftPressed = isShiftKey()
 
 	if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Delete then
 		deleteSelected()
@@ -1471,7 +1609,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		end
 	elseif input.KeyCode == Enum.KeyCode.Y and ctrlPressed then
 		redoState()
-	-- ★ 新機能：グループ化のショートカット (Ctrl+G / Ctrl+Shift+G)
 	elseif input.KeyCode == Enum.KeyCode.G and ctrlPressed then
 		if shiftPressed then
 			ungroupSelected()
@@ -1481,7 +1618,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- --- プロパティの反映 ---
 local function applyHexColors()
 	if #selectedElements == 1 then
 		local target = selectedElements[1]
@@ -1500,7 +1636,7 @@ local function applyHexColors()
 			local color2 = fromHex(gr2Hex.Text) or Color3.fromRGB(255, 255, 255)
 			grad.Color = ColorSequence.new(target.BackgroundColor3, color2)
 		end
-		updatePanel()
+		_G.updatePanel()
 	end
 end
 
@@ -1516,7 +1652,6 @@ gr2Hex.FocusLost:Connect(function()
 	applyHexColors()
 	saveState()
 end)
-
 bgChip.MouseButton1Click:Connect(function()
 	if #selectedElements == 1 then
 		openCustomPicker(selectedElements[1].BackgroundColor3, function(color)
@@ -1587,7 +1722,7 @@ gradToggleBtn.MouseButton1Click:Connect(function()
 			Instance.new("UIGradient", target)
 			applyHexColors()
 		end
-		updatePanel()
+		_G.updatePanel()
 		saveState()
 	end
 end)
@@ -1597,7 +1732,7 @@ textEditBox.FocusLost:Connect(function()
 		if target:IsA("TextLabel") or target:IsA("TextButton") then
 			target.Text = textEditBox.Text
 			task.wait(0.05)
-			updatePanel()
+			_G.updatePanel()
 			saveState()
 		end
 	end
@@ -1615,7 +1750,7 @@ fontSelectBtn.MouseButton1Click:Connect(function()
 				end
 			end
 			target.Font = availableFonts[ni]
-			updatePanel()
+			_G.updatePanel()
 			saveState()
 		end
 	end
@@ -1626,7 +1761,7 @@ fontSizeBox.FocusLost:Connect(function()
 		if target:IsA("TextLabel") or target:IsA("TextButton") then
 			target.TextSize = tonumber(fontSizeBox.Text) or 14
 			task.wait(0.05)
-			updatePanel()
+			_G.updatePanel()
 			saveState()
 		end
 	end
@@ -1651,7 +1786,7 @@ local function applySize()
 			tonumber(sizeY.Text) or target.AbsoluteSize.Y
 		)
 		task.wait(0.05)
-		updatePanel()
+		_G.updatePanel()
 		saveState()
 	end
 end
@@ -1672,7 +1807,7 @@ local function updatePadding()
 			target.TextWrapped = false
 		end
 		task.wait(0.05)
-		updatePanel()
+		_G.updatePanel()
 		saveState()
 	end
 end
@@ -1688,7 +1823,7 @@ local function setAutoSize(mode)
 		if target:IsA("TextLabel") or target:IsA("TextButton") then
 			target.TextWrapped = (mode == Enum.AutomaticSize.None)
 		end
-		updatePanel()
+		_G.updatePanel()
 		saveState()
 	end
 end
@@ -1706,7 +1841,17 @@ btnXY.MouseButton1Click:Connect(function()
 end)
 
 local function addElementToCanvas(className)
+	elementCount = elementCount + 1
 	local newPart = Instance.new(className)
+
+	if className == "Frame" then
+		newPart.Name = "Rectangle " .. elementCount
+	elseif className == "TextLabel" then
+		newPart.Name = "Text " .. elementCount
+	elseif className == "TextButton" then
+		newPart.Name = "Button " .. elementCount
+	end
+
 	newPart.Size = UDim2.new(0, 150, 0, 50)
 	newPart.Position = UDim2.new(0, math.floor(50 / snapSize) * snapSize, 0, math.floor(50 / snapSize) * snapSize)
 	if className ~= "Frame" then
@@ -1761,7 +1906,6 @@ btnExport.MouseButton1Click:Connect(function()
 		or Instance.new("ScreenGui", game:GetService("StarterGui"))
 	exportGui.Name = "UIBuilderExport"
 	exportGui:ClearAllChildren()
-	-- ★ グループ化された要素もそのまま階層構造を保って出力されます！
 	for _, element in ipairs(canvasArea:GetChildren()) do
 		if
 			element:IsA("GuiObject")
@@ -1776,7 +1920,7 @@ btnExport.MouseButton1Click:Connect(function()
 end)
 
 -- 初期化
-updatePanel()
+_G.updatePanel()
 saveState()
 
 toggleButton.Click:Connect(function()
