@@ -192,7 +192,7 @@ propertyPanel.Size = UDim2.new(0, 260, 1, 0)
 propertyPanel.Position = UDim2.new(1, -260, 0, 0)
 propertyPanel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 propertyPanel.BorderSizePixel = 0
-propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 1250)
+propertyPanel.CanvasSize = UDim2.new(0, 0, 0, 1350)
 propertyPanel.ScrollBarThickness = 2
 
 local propLayout = Instance.new("UIListLayout", propertyPanel)
@@ -211,6 +211,39 @@ propTitle.Font = Enum.Font.BuilderSansBold
 propTitle.TextSize = 16
 propTitle.TextXAlignment = Enum.TextXAlignment.Left
 propTitle.LayoutOrder = 0
+
+-- ==========================================
+-- ★ 新機能：ALIGNMENT（自動整列ツール） ★
+-- ==========================================
+local blockAlign, areaAlign = createPropertyBlock("ALIGNMENT (ALIGN & DISTRIBUTE)", propertyPanel, 55)
+
+local function createAlignBtn(text, parent, pos)
+	local b = Instance.new("TextButton", parent)
+	b.Size = UDim2.new(0.31, 0, 1, 0)
+	b.Position = UDim2.new(pos, 0, 0, 0)
+	b.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	b.TextColor3 = Color3.fromRGB(200, 200, 200)
+	b.Text = text
+	b.Font = Enum.Font.BuilderSansBold
+	b.TextSize = 10
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
+	return b
+end
+
+local alignRow1 = Instance.new("Frame", areaAlign)
+alignRow1.Size = UDim2.new(1, 0, 0, 24)
+alignRow1.BackgroundTransparency = 1
+local btnAlignLeft = createAlignBtn("左揃え", alignRow1, 0)
+local btnAlignCenterX = createAlignBtn("中央(横)", alignRow1, 0.345)
+local btnAlignRight = createAlignBtn("右揃え", alignRow1, 0.69)
+
+local alignRow2 = Instance.new("Frame", areaAlign)
+alignRow2.Size = UDim2.new(1, 0, 0, 24)
+alignRow2.Position = UDim2.new(0, 0, 0, 29)
+alignRow2.BackgroundTransparency = 1
+local btnAlignTop = createAlignBtn("上揃え", alignRow2, 0)
+local btnAlignCenterY = createAlignBtn("中央(縦)", alignRow2, 0.345)
+local btnAlignBottom = createAlignBtn("下揃え", alignRow2, 0.69)
 
 -- --- プロパティ項目 ---
 local blockText, areaText = createPropertyBlock("CONTENT (TEXT)", propertyPanel, 28)
@@ -347,7 +380,6 @@ function saveState()
 	end
 	local state = {}
 	for _, child in ipairs(canvasArea:GetChildren()) do
-		-- ★ マルチハイライトや矩形ボックスも除外
 		if
 			child:IsA("GuiObject")
 			and not child.Name:match("Highlight")
@@ -632,11 +664,10 @@ end)
 -- ==========================================
 -- ★ 新機能：複数選択（Multi-Selection）とハイライト管理 ★
 -- ==========================================
-local selectedElements = {} -- ★ 複数選択を管理するテーブル
+local selectedElements = {}
 local highlightFrames = {}
 local isResizing = false
 
--- 1つの要素専用のリサイズハンドルコンテナ
 local selectionHighlight = Instance.new("Frame")
 selectionHighlight.Name = "SelectionHighlight"
 selectionHighlight.BackgroundTransparency = 1
@@ -652,7 +683,6 @@ shStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 local shCorner = Instance.new("UICorner", selectionHighlight)
 
--- 8方向のリサイズハンドル
 local resizeHandles = {}
 local handleDirs = {
 	TopLeft = { x = -1, y = -1 },
@@ -701,7 +731,6 @@ for name, dir in pairs(handleDirs) do
 	resizeHandles[name] = { btn = handle, dir = dir }
 end
 
--- ★ 複数選択のハイライトを更新するシステム
 local function refreshHighlights()
 	for _, h in ipairs(highlightFrames) do
 		h.frame:Destroy()
@@ -723,9 +752,7 @@ local function refreshHighlights()
 	end
 end
 
--- 毎フレームのハイライト追従処理
 RunService.Heartbeat:Connect(function()
-	-- 個別ハイライトの追従
 	for _, hd in ipairs(highlightFrames) do
 		if hd.target and hd.target.Parent then
 			hd.frame.Size = UDim2.new(0, hd.target.AbsoluteSize.X, 0, hd.target.AbsoluteSize.Y)
@@ -735,7 +762,6 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 
-	-- 単一選択時のみ、リサイズハンドル枠を表示して追従させる
 	if #selectedElements == 1 then
 		local target = selectedElements[1]
 		selectionHighlight.Visible = true
@@ -750,7 +776,6 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- リサイズハンドルのドラッグ処理 (単一選択時のみ動作)
 local resizeLoopConn = nil
 for name, data in pairs(resizeHandles) do
 	data.btn.InputBegan:Connect(function(input)
@@ -834,6 +859,7 @@ end
 
 -- --- プロパティパネル管理 ---
 local allBlocks = {
+	blockAlign,
 	blockText,
 	blockFont,
 	blockFontSize,
@@ -868,10 +894,10 @@ local function updatePanel()
 		for _, block in ipairs(allBlocks) do
 			block.Visible = false
 		end
+		blockAlign.Visible = true -- ★ 複数選択時も整列ツールは表示する！
 		return
 	end
 
-	-- 単一選択時のみプロパティを表示
 	local target = selectedElements[1]
 	if not target or not target.Parent then
 		return
@@ -948,7 +974,85 @@ function _G.clearSelection()
 end
 
 -- ==========================================
--- ★ 新機能：ドラッグ囲み選択 (Marquee) と 複数ドラッグ ★
+-- ★ 新機能：ALIGNMENT（自動整列の実行ロジック） ★
+-- ==========================================
+local function alignElements(mode)
+	if #selectedElements == 0 then
+		return
+	end
+
+	local targetMinX, targetMaxX, targetMinY, targetMaxY
+	local canvasWidth = canvasArea.AbsoluteSize.X
+	local canvasHeight = canvasArea.AbsoluteSize.Y
+
+	-- 単一選択時はキャンバス全体を基準に整列
+	if #selectedElements == 1 then
+		targetMinX, targetMinY = 0, 0
+		targetMaxX, targetMaxY = canvasWidth, canvasHeight
+	else
+		-- 複数選択時は選択された要素の「一番外側の枠（バウンディングボックス）」を基準に整列
+		targetMinX, targetMinY = math.huge, math.huge
+		targetMaxX, targetMaxY = -math.huge, -math.huge
+		for _, el in ipairs(selectedElements) do
+			local ex, ey = el.Position.X.Offset, el.Position.Y.Offset
+			local ew, eh = el.Size.X.Offset, el.Size.Y.Offset
+			targetMinX = math.min(targetMinX, ex)
+			targetMinY = math.min(targetMinY, ey)
+			targetMaxX = math.max(targetMaxX, ex + ew)
+			targetMaxY = math.max(targetMaxY, ey + eh)
+		end
+	end
+
+	-- 一気に整列させる
+	for _, el in ipairs(selectedElements) do
+		local ew, eh = el.Size.X.Offset, el.Size.Y.Offset
+		local newX = el.Position.X.Offset
+		local newY = el.Position.Y.Offset
+
+		if mode == "Left" then
+			newX = targetMinX
+		elseif mode == "CenterX" then
+			newX = (targetMinX + targetMaxX) / 2 - ew / 2
+		elseif mode == "Right" then
+			newX = targetMaxX - ew
+		elseif mode == "Top" then
+			newY = targetMinY
+		elseif mode == "CenterY" then
+			newY = (targetMinY + targetMaxY) / 2 - eh / 2
+		elseif mode == "Bottom" then
+			newY = targetMaxY - eh
+		end
+
+		-- 少数を切り捨ててピタッと配置
+		el.Position = UDim2.new(el.Position.X.Scale, math.floor(newX), el.Position.Y.Scale, math.floor(newY))
+	end
+
+	updatePanel()
+	saveState()
+end
+
+-- 整列ボタンのイベント接続
+btnAlignLeft.MouseButton1Click:Connect(function()
+	alignElements("Left")
+end)
+btnAlignCenterX.MouseButton1Click:Connect(function()
+	alignElements("CenterX")
+end)
+btnAlignRight.MouseButton1Click:Connect(function()
+	alignElements("Right")
+end)
+btnAlignTop.MouseButton1Click:Connect(function()
+	alignElements("Top")
+end)
+btnAlignCenterY.MouseButton1Click:Connect(function()
+	alignElements("CenterY")
+end)
+btnAlignBottom.MouseButton1Click:Connect(function()
+	alignElements("Bottom")
+end)
+
+-- ==========================================
+-- ★ ドラッグ囲み選択 (Marquee) と 複数ドラッグ ★
 -- ==========================================
 local clickCatcher = Instance.new("TextButton")
 clickCatcher.Name = "ClickCatcher"
@@ -958,7 +1062,6 @@ clickCatcher.Text = ""
 clickCatcher.ZIndex = 9998
 clickCatcher.Parent = canvasArea
 
--- 半透明の選択ボックス (Marquee)
 local marqueeBox = Instance.new("Frame")
 marqueeBox.Name = "MarqueeBox"
 marqueeBox.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
@@ -982,7 +1085,6 @@ clickCatcher.InputBegan:Connect(function(input)
 		local highestZIndex = -math.huge
 		local highestChildIndex = -1
 
-		-- ヒット判定
 		local children = canvasArea:GetChildren()
 		for i, child in ipairs(children) do
 			if
@@ -1009,15 +1111,12 @@ clickCatcher.InputBegan:Connect(function(input)
 		end
 
 		if topElement then
-			-- ★ 要素をクリックした場合の処理
-			-- もしクリックした要素がまだ選ばれていなければ、それ単体を選ぶ
 			if not table.find(selectedElements, topElement) then
 				selectedElements = { topElement }
 				refreshHighlights()
 				updatePanel()
 			end
 
-			-- 選択されている全要素のドラッグ開始
 			local dragStartMouseWidget = widget:GetRelativeMousePosition()
 			local startOffsets = {}
 			for _, el in ipairs(selectedElements) do
@@ -1034,7 +1133,6 @@ clickCatcher.InputBegan:Connect(function(input)
 					local deltaX = currentMouse.X - dragStartMouseWidget.X
 					local deltaY = currentMouse.Y - dragStartMouseWidget.Y
 
-					-- 選択されている全要素を一斉に動かす（スナップ対応）
 					for _, el in ipairs(selectedElements) do
 						local startPos = startOffsets[el]
 						if startPos then
@@ -1059,7 +1157,6 @@ clickCatcher.InputBegan:Connect(function(input)
 						dragLoopConn:Disconnect()
 					end
 
-					-- 動いた要素があれば保存
 					local moved = false
 					for _, el in ipairs(selectedElements) do
 						if startOffsets[el] and el.Position ~= startOffsets[el] then
@@ -1075,7 +1172,6 @@ clickCatcher.InputBegan:Connect(function(input)
 				end
 			end)
 		else
-			-- ★ 何もない空のキャンバスをクリックした場合 (ドラッグ囲み選択開始)
 			selectedElements = {}
 			refreshHighlights()
 			updatePanel()
@@ -1123,7 +1219,6 @@ clickCatcher.InputBegan:Connect(function(input)
 					end
 					endConn:Disconnect()
 
-					-- ★ 囲んだ範囲に触れている要素を一括選択！
 					local mPos = marqueeBox.AbsolutePosition
 					local mSize = marqueeBox.AbsoluteSize
 					local mRect = Rect.new(mPos, mPos + mSize)
@@ -1140,7 +1235,6 @@ clickCatcher.InputBegan:Connect(function(input)
 							local cSize = child.AbsoluteSize
 							local cRect = Rect.new(cPos, cPos + cSize)
 
-							-- 重なり判定 (AABB collision)
 							if
 								mRect.Min.X < cRect.Max.X
 								and mRect.Max.X > cRect.Min.X
@@ -1263,7 +1357,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -- --- プロパティの反映 ---
--- ※複数選択時の複雑なプロパティ同期を防ぐため、プロパティ変更は単一選択時のみ適用
 local function applyHexColors()
 	if #selectedElements == 1 then
 		local target = selectedElements[1]
@@ -1490,7 +1583,6 @@ end)
 local function addElementToCanvas(className)
 	local newPart = Instance.new(className)
 	newPart.Size = UDim2.new(0, 150, 0, 50)
-	-- 生成時にスナップ位置（50px）に配置する
 	newPart.Position = UDim2.new(0, math.floor(50 / snapSize) * snapSize, 0, math.floor(50 / snapSize) * snapSize)
 	if className ~= "Frame" then
 		newPart.Text = "New Element"
