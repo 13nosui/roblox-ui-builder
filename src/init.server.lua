@@ -311,195 +311,6 @@ local btnNone, btnX, btnY, btnXY =
 	createAutoBtn("OFF", 0), createAutoBtn("↔ X", 0.25), createAutoBtn("↕ Y", 0.5), createAutoBtn("↔↕ XY", 0.75)
 
 -- ==========================================
--- ★ 独立したハイライト枠の構築 ★
--- ==========================================
-local selectedElement = nil
-local selectionHighlight = Instance.new("Frame")
-selectionHighlight.Name = "SelectionHighlight"
-selectionHighlight.BackgroundTransparency = 1
-selectionHighlight.Active = false
-selectionHighlight.ZIndex = 9999
-
-local shStroke = Instance.new("UIStroke", selectionHighlight)
-shStroke.Color = Color3.fromRGB(0, 162, 255)
-shStroke.Thickness = 3
-shStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
-local shCorner = Instance.new("UICorner", selectionHighlight)
-
-RunService.Heartbeat:Connect(function()
-	if selectedElement and selectionHighlight.Parent == canvasArea then
-		selectionHighlight.Size = UDim2.new(0, selectedElement.AbsoluteSize.X, 0, selectedElement.AbsoluteSize.Y)
-		selectionHighlight.Position = selectedElement.Position
-		local c = selectedElement:FindFirstChildOfClass("UICorner")
-		shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
-	end
-end)
-
--- --- システムロジック ---
-local availableFonts = {
-	Enum.Font.Gotham,
-	Enum.Font.GothamBold,
-	Enum.Font.FredokaOne,
-	Enum.Font.LuckiestGuy,
-	Enum.Font.Roboto,
-	Enum.Font.Arcade,
-}
-
-local allBlocks = {
-	blockText,
-	blockFont,
-	blockFontSize,
-	blockBgColor,
-	blockTxtColor,
-	blockOutline,
-	blockGradToggle,
-	blockGradColor,
-	blockCorner,
-	blockSize,
-	blockPadding,
-	blockZIndex,
-	blockAuto,
-}
-
-local function updatePanel()
-	if not selectedElement or not selectedElement.Parent then
-		selectionHighlight.Parent = nil
-		propTitle.Text = "No Selection"
-		for _, block in ipairs(allBlocks) do
-			block.Visible = false
-		end
-		return
-	end
-
-	selectionHighlight.Parent = canvasArea
-	for _, block in ipairs(allBlocks) do
-		block.Visible = true
-	end
-
-	propTitle.Text = selectedElement.ClassName
-	local isText = selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")
-	blockText.Visible = isText
-	blockFont.Visible = isText
-	blockFontSize.Visible = isText
-	blockTxtColor.Visible = isText
-
-	if isText then
-		textEditBox.Text = selectedElement.Text
-		fontSelectBtn.Text = selectedElement.Font.Name
-		fontSizeBox.Text = tostring(selectedElement.TextSize)
-		txtHex.Text = toHex(selectedElement.TextColor3)
-		txtChip.BackgroundColor3 = selectedElement.TextColor3
-	end
-
-	bgHex.Text = toHex(selectedElement.BackgroundColor3)
-	bgChip.BackgroundColor3 = selectedElement.BackgroundColor3
-	local stroke = selectedElement:FindFirstChild("DesignStroke")
-	outlineBox.Text = stroke and tostring(stroke.Thickness) or "0"
-
-	local grad = selectedElement:FindFirstChildOfClass("UIGradient")
-	gradToggleBtn.Text = grad and "ON" or "OFF"
-	gradToggleBtn.BackgroundColor3 = grad and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(50, 50, 50)
-	blockGradColor.Visible = (grad ~= nil)
-	if grad then
-		local color2 = grad.Color.Keypoints[2].Value
-		gr2Hex.Text = toHex(color2)
-		gr2Chip.BackgroundColor3 = color2
-	end
-
-	cornerEditBox.Text = selectedElement:FindFirstChildOfClass("UICorner")
-			and tostring(selectedElement:FindFirstChildOfClass("UICorner").CornerRadius.Offset)
-		or "0"
-	sizeX.Text, sizeY.Text =
-		tostring(math.floor(selectedElement.AbsoluteSize.X)), tostring(math.floor(selectedElement.AbsoluteSize.Y))
-	local pad = selectedElement:FindFirstChildOfClass("UIPadding")
-	if pad then
-		padT.Text, padB.Text, padL.Text, padR.Text =
-			tostring(pad.PaddingTop.Offset),
-			tostring(pad.PaddingBottom.Offset),
-			tostring(pad.PaddingLeft.Offset),
-			tostring(pad.PaddingRight.Offset)
-	else
-		padT.Text, padB.Text, padL.Text, padR.Text = "0", "0", "0", "0"
-	end
-	zIndexBox.Text = tostring(selectedElement.ZIndex)
-	local current = selectedElement.AutomaticSize
-	btnNone.BackgroundColor3 = current == Enum.AutomaticSize.None and Color3.fromRGB(0, 120, 215)
-		or Color3.fromRGB(50, 50, 50)
-	btnX.BackgroundColor3 = current == Enum.AutomaticSize.X and Color3.fromRGB(0, 120, 215)
-		or Color3.fromRGB(50, 50, 50)
-	btnY.BackgroundColor3 = current == Enum.AutomaticSize.Y and Color3.fromRGB(0, 120, 215)
-		or Color3.fromRGB(50, 50, 50)
-	btnXY.BackgroundColor3 = current == Enum.AutomaticSize.XY and Color3.fromRGB(0, 120, 215)
-		or Color3.fromRGB(50, 50, 50)
-end
-
-local function selectElement(element)
-	selectedElement = element
-	updatePanel()
-end
-
--- ==========================================
--- ★ 新開発！究極の「自作ヒストリーエンジン」 (Undo/Redo) ★
--- ==========================================
-local historyStack = {}
-local historyIndex = 0
-local maxHistory = 50
-
-local function saveState()
-	for i = #historyStack, historyIndex + 1, -1 do
-		historyStack[i] = nil
-	end
-
-	local state = {}
-	for _, child in ipairs(canvasArea:GetChildren()) do
-		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
-			table.insert(state, child:Clone())
-		end
-	end
-
-	table.insert(historyStack, state)
-	if #historyStack > maxHistory then
-		table.remove(historyStack, 1)
-	else
-		historyIndex = historyIndex + 1
-	end
-end
-
-local function loadState(index)
-	if index < 1 or index > #historyStack then
-		return
-	end
-	for _, child in ipairs(canvasArea:GetChildren()) do
-		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
-			child:Destroy()
-		end
-	end
-	local state = historyStack[index]
-	for _, savedChild in ipairs(state) do
-		local clone = savedChild:Clone()
-		clone.Parent = canvasArea
-	end
-	selectElement(nil)
-end
-
-local function undoState()
-	if historyIndex > 1 then
-		historyIndex = historyIndex - 1
-		loadState(historyIndex)
-	end
-end
-local function redoState()
-	if historyIndex < #historyStack then
-		historyIndex = historyIndex + 1
-		loadState(historyIndex)
-	end
-end
-
-btnUndo.MouseButton1Click:Connect(undoState)
-btnRedo.MouseButton1Click:Connect(redoState)
-
--- ==========================================
 -- ★ 60fps カラーピッカー ★
 -- ==========================================
 local pickerBlocker = Instance.new("TextButton")
@@ -726,7 +537,338 @@ confirmBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- ★ ガラス板による完全ドラッグ管理 (バグ修正版) ★
+-- ★ ヒストリーエンジン (Undo/Redo) ★
+-- ==========================================
+local historyStack = {}
+local historyIndex = 0
+local maxHistory = 50
+
+function saveState() -- グローバルで呼べるようにlocal外す
+	for i = #historyStack, historyIndex + 1, -1 do
+		historyStack[i] = nil
+	end
+
+	local state = {}
+	for _, child in ipairs(canvasArea:GetChildren()) do
+		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
+			table.insert(state, child:Clone())
+		end
+	end
+
+	table.insert(historyStack, state)
+	if #historyStack > maxHistory then
+		table.remove(historyStack, 1)
+	else
+		historyIndex = historyIndex + 1
+	end
+end
+
+local function loadState(index)
+	if index < 1 or index > #historyStack then
+		return
+	end
+	for _, child in ipairs(canvasArea:GetChildren()) do
+		if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
+			child:Destroy()
+		end
+	end
+	local state = historyStack[index]
+	for _, savedChild in ipairs(state) do
+		local clone = savedChild:Clone()
+		clone.Parent = canvasArea
+	end
+	selectElement(nil) -- ロード時は選択解除
+end
+
+local function undoState()
+	if historyIndex > 1 then
+		historyIndex = historyIndex - 1
+		loadState(historyIndex)
+	end
+end
+local function redoState()
+	if historyIndex < #historyStack then
+		historyIndex = historyIndex + 1
+		loadState(historyIndex)
+	end
+end
+
+btnUndo.MouseButton1Click:Connect(undoState)
+btnRedo.MouseButton1Click:Connect(redoState)
+
+-- ==========================================
+-- ★ 独立したハイライト枠と【新機能：リサイズハンドル】の構築 ★
+-- ==========================================
+local selectedElement = nil
+local isResizing = false -- リサイズ中かどうかを判定するバリア
+
+local selectionHighlight = Instance.new("Frame")
+selectionHighlight.Name = "SelectionHighlight"
+selectionHighlight.BackgroundTransparency = 1
+selectionHighlight.Active = false
+selectionHighlight.ZIndex = 9999
+
+local shStroke = Instance.new("UIStroke", selectionHighlight)
+shStroke.Color = Color3.fromRGB(0, 162, 255)
+shStroke.Thickness = 2
+shStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local shCorner = Instance.new("UICorner", selectionHighlight)
+
+-- 8方向のリサイズハンドルを作成
+local resizeHandles = {}
+local handleDirs = {
+	TopLeft = { x = -1, y = -1 },
+	Top = { x = 0, y = -1 },
+	TopRight = { x = 1, y = -1 },
+	Left = { x = -1, y = 0 },
+	Right = { x = 1, y = 0 },
+	BottomLeft = { x = -1, y = 1 },
+	Bottom = { x = 0, y = 1 },
+	BottomRight = { x = 1, y = 1 },
+}
+
+for name, dir in pairs(handleDirs) do
+	local handle = Instance.new("TextButton")
+	handle.Name = name
+	handle.Size = UDim2.new(0, 8, 0, 8)
+	handle.AnchorPoint = Vector2.new(0.5, 0.5)
+	handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	handle.Text = ""
+	handle.AutoButtonColor = false
+	handle.ZIndex = 10000 -- ハイライト枠よりさらに手前
+	handle.Active = true -- クリックをここで吸収する！
+
+	local hStroke = Instance.new("UIStroke", handle)
+	hStroke.Color = Color3.fromRGB(0, 120, 215)
+	hStroke.Thickness = 1
+
+	-- 位置の割り当て
+	if name == "TopLeft" then
+		handle.Position = UDim2.new(0, 0, 0, 0)
+	elseif name == "Top" then
+		handle.Position = UDim2.new(0.5, 0, 0, 0)
+	elseif name == "TopRight" then
+		handle.Position = UDim2.new(1, 0, 0, 0)
+	elseif name == "Left" then
+		handle.Position = UDim2.new(0, 0, 0.5, 0)
+	elseif name == "Right" then
+		handle.Position = UDim2.new(1, 0, 0.5, 0)
+	elseif name == "BottomLeft" then
+		handle.Position = UDim2.new(0, 0, 1, 0)
+	elseif name == "Bottom" then
+		handle.Position = UDim2.new(0.5, 0, 1, 0)
+	elseif name == "BottomRight" then
+		handle.Position = UDim2.new(1, 0, 1, 0)
+	end
+
+	handle.Parent = selectionHighlight
+	resizeHandles[name] = { btn = handle, dir = dir }
+end
+
+-- リサイズ実行ロジック
+local resizeLoopConn = nil
+for name, data in pairs(resizeHandles) do
+	data.btn.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if not selectedElement then
+				return
+			end
+
+			isResizing = true -- ドラッグを無効化するバリア展開
+			local startMouse = widget:GetRelativeMousePosition()
+			local startSize = selectedElement.Size
+			local startPos = selectedElement.Position
+			local dir = data.dir
+
+			if resizeLoopConn then
+				resizeLoopConn:Disconnect()
+			end
+
+			resizeLoopConn = RunService.Heartbeat:Connect(function()
+				if isResizing and selectedElement then
+					local currentMouse = widget:GetRelativeMousePosition()
+					local deltaX = currentMouse.X - startMouse.X
+					local deltaY = currentMouse.Y - startMouse.Y
+
+					local newSizeX = startSize.X.Offset
+					local newSizeY = startSize.Y.Offset
+					local newPosX = startPos.X.Offset
+					local newPosY = startPos.Y.Offset
+
+					-- X方向の計算
+					if dir.x == 1 then
+						newSizeX = math.max(10, startSize.X.Offset + deltaX)
+					elseif dir.x == -1 then
+						local maxDeltaX = startSize.X.Offset - 10
+						local actualDeltaX = math.min(deltaX, maxDeltaX)
+						newSizeX = startSize.X.Offset - actualDeltaX
+						newPosX = startPos.X.Offset + actualDeltaX
+					end
+
+					-- Y方向の計算
+					if dir.y == 1 then
+						newSizeY = math.max(10, startSize.Y.Offset + deltaY)
+					elseif dir.y == -1 then
+						local maxDeltaY = startSize.Y.Offset - 10
+						local actualDeltaY = math.min(deltaY, maxDeltaY)
+						newSizeY = startSize.Y.Offset - actualDeltaY
+						newPosY = startPos.Y.Offset + actualDeltaY
+					end
+
+					-- 適用
+					selectedElement.Size = UDim2.new(startSize.X.Scale, newSizeX, startSize.Y.Scale, newSizeY)
+					selectedElement.Position = UDim2.new(startPos.X.Scale, newPosX, startPos.Y.Scale, newPosY)
+
+					-- ハイライト枠も即座に追従させる
+					selectionHighlight.Size = UDim2.new(0, newSizeX, 0, newSizeY)
+					selectionHighlight.Position = UDim2.new(startPos.X.Scale, newPosX, startPos.Y.Scale, newPosY)
+
+					-- プロパティパネルの数値もリアルタイム更新
+					if sizeX and sizeY then
+						sizeX.Text = tostring(math.floor(newSizeX))
+						sizeY.Text = tostring(math.floor(newSizeY))
+					end
+				end
+			end)
+
+			-- マウスを離した時の処理
+			local endConn
+			endConn = input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					if isResizing and selectedElement and selectedElement.Size ~= startSize then
+						saveState() -- サイズ変更が確定したら履歴に保存
+					end
+					isResizing = false
+					if resizeLoopConn then
+						resizeLoopConn:Disconnect()
+					end
+					endConn:Disconnect()
+				end
+			end)
+		end
+	end)
+end
+
+-- 普段のハイライト枠追従
+RunService.Heartbeat:Connect(function()
+	-- リサイズ中以外は自動で要素に追従
+	if selectedElement and selectionHighlight.Parent == canvasArea and not isResizing then
+		selectionHighlight.Size = UDim2.new(0, selectedElement.AbsoluteSize.X, 0, selectedElement.AbsoluteSize.Y)
+		selectionHighlight.Position = selectedElement.Position
+		local c = selectedElement:FindFirstChildOfClass("UICorner")
+		shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
+	end
+end)
+
+-- --- システムロジック ---
+local availableFonts = {
+	Enum.Font.Gotham,
+	Enum.Font.GothamBold,
+	Enum.Font.FredokaOne,
+	Enum.Font.LuckiestGuy,
+	Enum.Font.Roboto,
+	Enum.Font.Arcade,
+}
+
+local allBlocks = {
+	blockText,
+	blockFont,
+	blockFontSize,
+	blockBgColor,
+	blockTxtColor,
+	blockOutline,
+	blockGradToggle,
+	blockGradColor,
+	blockCorner,
+	blockSize,
+	blockPadding,
+	blockZIndex,
+	blockAuto,
+}
+
+function updatePanel() -- グローバル化
+	if not selectedElement or not selectedElement.Parent then
+		selectionHighlight.Parent = nil
+		propTitle.Text = "No Selection"
+		for _, block in ipairs(allBlocks) do
+			block.Visible = false
+		end
+		return
+	end
+
+	selectionHighlight.Parent = canvasArea
+	for _, block in ipairs(allBlocks) do
+		block.Visible = true
+	end
+
+	propTitle.Text = selectedElement.ClassName
+	local isText = selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")
+	blockText.Visible = isText
+	blockFont.Visible = isText
+	blockFontSize.Visible = isText
+	blockTxtColor.Visible = isText
+
+	if isText then
+		textEditBox.Text = selectedElement.Text
+		fontSelectBtn.Text = selectedElement.Font.Name
+		fontSizeBox.Text = tostring(selectedElement.TextSize)
+		txtHex.Text = toHex(selectedElement.TextColor3)
+		txtChip.BackgroundColor3 = selectedElement.TextColor3
+	end
+
+	bgHex.Text = toHex(selectedElement.BackgroundColor3)
+	bgChip.BackgroundColor3 = selectedElement.BackgroundColor3
+	local stroke = selectedElement:FindFirstChild("DesignStroke")
+	outlineBox.Text = stroke and tostring(stroke.Thickness) or "0"
+
+	local grad = selectedElement:FindFirstChildOfClass("UIGradient")
+	gradToggleBtn.Text = grad and "ON" or "OFF"
+	gradToggleBtn.BackgroundColor3 = grad and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(50, 50, 50)
+	blockGradColor.Visible = (grad ~= nil)
+	if grad then
+		local color2 = grad.Color.Keypoints[2].Value
+		gr2Hex.Text = toHex(color2)
+		gr2Chip.BackgroundColor3 = color2
+	end
+
+	cornerEditBox.Text = selectedElement:FindFirstChildOfClass("UICorner")
+			and tostring(selectedElement:FindFirstChildOfClass("UICorner").CornerRadius.Offset)
+		or "0"
+	-- リサイズ中以外は数値を更新（リサイズ中は上で更新しているため競合を防ぐ）
+	if not isResizing then
+		sizeX.Text, sizeY.Text =
+			tostring(math.floor(selectedElement.AbsoluteSize.X)), tostring(math.floor(selectedElement.AbsoluteSize.Y))
+	end
+	local pad = selectedElement:FindFirstChildOfClass("UIPadding")
+	if pad then
+		padT.Text, padB.Text, padL.Text, padR.Text =
+			tostring(pad.PaddingTop.Offset),
+			tostring(pad.PaddingBottom.Offset),
+			tostring(pad.PaddingLeft.Offset),
+			tostring(pad.PaddingRight.Offset)
+	else
+		padT.Text, padB.Text, padL.Text, padR.Text = "0", "0", "0", "0"
+	end
+	zIndexBox.Text = tostring(selectedElement.ZIndex)
+	local current = selectedElement.AutomaticSize
+	btnNone.BackgroundColor3 = current == Enum.AutomaticSize.None and Color3.fromRGB(0, 120, 215)
+		or Color3.fromRGB(50, 50, 50)
+	btnX.BackgroundColor3 = current == Enum.AutomaticSize.X and Color3.fromRGB(0, 120, 215)
+		or Color3.fromRGB(50, 50, 50)
+	btnY.BackgroundColor3 = current == Enum.AutomaticSize.Y and Color3.fromRGB(0, 120, 215)
+		or Color3.fromRGB(50, 50, 50)
+	btnXY.BackgroundColor3 = current == Enum.AutomaticSize.XY and Color3.fromRGB(0, 120, 215)
+		or Color3.fromRGB(50, 50, 50)
+end
+
+function selectElement(element)
+	selectedElement = element
+	updatePanel()
+end
+
+-- ==========================================
+-- ★ ガラス板による完全ドラッグ管理 ★
 -- ==========================================
 local clickCatcher = Instance.new("TextButton")
 clickCatcher.Name = "ClickCatcher"
@@ -744,6 +886,10 @@ local dragLoopConn = nil
 clickCatcher.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		if pickerBlocker.Visible then
+			return
+		end
+		-- ★ リサイズハンドルをつまんでいる最中はドラッグ処理を無効化！
+		if isResizing then
 			return
 		end
 
@@ -797,7 +943,6 @@ clickCatcher.InputBegan:Connect(function(input)
 				end
 			end)
 
-			-- ★ 今回の完全修正：正しく input.Changed を監視してマウス離上を拾う！
 			local endConn
 			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
@@ -873,7 +1018,6 @@ btnZUp.MouseButton1Click:Connect(function()
 	moveZIndex(1)
 end)
 
--- キーボードショートカット
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then
 		return
