@@ -264,7 +264,6 @@ local function createPadBox()
 end
 local padT, padB, padL, padR = createPadBox(), createPadBox(), createPadBox(), createPadBox()
 
--- ★ 新機能：Z-INDEX 追加
 local blockZIndex, areaZIndex = createPropertyBlock("Z-INDEX (LAYER ORDER)", propertyPanel, 28)
 local zIndexContainer = Instance.new("Frame", areaZIndex)
 zIndexContainer.Size = UDim2.new(1, 0, 1, 0)
@@ -308,7 +307,7 @@ local btnNone, btnX, btnY, btnXY =
 	createAutoBtn("OFF", 0), createAutoBtn("↔ X", 0.25), createAutoBtn("↕ Y", 0.5), createAutoBtn("↔↕ XY", 0.75)
 
 -- ==========================================
--- ★ 60fps ヌルヌル駆動カラーピッカー ★
+-- ★ 60fps カラーピッカー ★
 -- ==========================================
 local pickerBlocker = Instance.new("TextButton")
 pickerBlocker.Size = UDim2.new(1, 0, 1, 0)
@@ -486,6 +485,8 @@ local function setupSlider(area, isHue)
 					loopConn:Disconnect()
 				end
 			end)
+
+			-- ピッカーのスライダーも確実に判定
 			local endConn
 			endConn = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
@@ -520,15 +521,34 @@ confirmBtn.MouseButton1Click:Connect(function()
 	end
 	closePicker()
 end)
+
 -- ==========================================
+-- ★ 独立したハイライト枠の構築 ★
+-- ==========================================
+local selectedElement = nil
+local selectionHighlight = Instance.new("Frame")
+selectionHighlight.Name = "SelectionHighlight"
+selectionHighlight.BackgroundTransparency = 1
+selectionHighlight.Active = false
+selectionHighlight.ZIndex = 9999
+
+local shStroke = Instance.new("UIStroke", selectionHighlight)
+shStroke.Color = Color3.fromRGB(0, 162, 255)
+shStroke.Thickness = 3
+shStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+local shCorner = Instance.new("UICorner", selectionHighlight)
+
+RunService.Heartbeat:Connect(function()
+	if selectedElement and selectionHighlight.Parent == canvasArea then
+		selectionHighlight.Size = UDim2.new(0, selectedElement.AbsoluteSize.X, 0, selectedElement.AbsoluteSize.Y)
+		selectionHighlight.Position = selectedElement.Position
+		local c = selectedElement:FindFirstChildOfClass("UICorner")
+		shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
+	end
+end)
 
 -- --- システムロジック ---
-local selectedElement = nil
-local selectionHighlight = Instance.new("UIStroke")
-selectionHighlight.Color = Color3.fromRGB(0, 162, 255)
-selectionHighlight.Thickness = 3
-selectionHighlight.Name = "SelectionHighlight"
-
 local availableFonts = {
 	Enum.Font.Gotham,
 	Enum.Font.GothamBold,
@@ -538,7 +558,6 @@ local availableFonts = {
 	Enum.Font.Arcade,
 }
 
--- ★ すべてのプロパティブロックをリスト化して一括管理
 local allBlocks = {
 	blockText,
 	blockFont,
@@ -552,11 +571,12 @@ local allBlocks = {
 	blockSize,
 	blockPadding,
 	blockZIndex,
-	blockAuto, -- blockZIndex を追加！
+	blockAuto,
 }
 
 local function updatePanel()
 	if not selectedElement then
+		selectionHighlight.Parent = nil
 		propTitle.Text = "No Selection"
 		for _, block in ipairs(allBlocks) do
 			block.Visible = false
@@ -564,6 +584,7 @@ local function updatePanel()
 		return
 	end
 
+	selectionHighlight.Parent = canvasArea
 	for _, block in ipairs(allBlocks) do
 		block.Visible = true
 	end
@@ -585,7 +606,6 @@ local function updatePanel()
 
 	bgHex.Text = toHex(selectedElement.BackgroundColor3)
 	bgChip.BackgroundColor3 = selectedElement.BackgroundColor3
-
 	local stroke = selectedElement:FindFirstChild("DesignStroke")
 	outlineBox.Text = stroke and tostring(stroke.Thickness) or "0"
 
@@ -614,10 +634,7 @@ local function updatePanel()
 	else
 		padT.Text, padB.Text, padL.Text, padR.Text = "0", "0", "0", "0"
 	end
-
-	-- ★ ZIndex の同期
 	zIndexBox.Text = tostring(selectedElement.ZIndex)
-
 	local current = selectedElement.AutomaticSize
 	btnNone.BackgroundColor3 = current == Enum.AutomaticSize.None and Color3.fromRGB(0, 120, 215)
 		or Color3.fromRGB(50, 50, 50)
@@ -631,12 +648,103 @@ end
 
 local function selectElement(element)
 	selectedElement = element
-	selectionHighlight.Parent = element
 	updatePanel()
 end
 
 -- ==========================================
--- ★ 削除・複製・ZIndex ロジック ★
+-- ★ Figma式「透明なガラスの板」によるクリック・ドラッグ統合管理 ★
+-- ==========================================
+
+local clickCatcher = Instance.new("TextButton")
+clickCatcher.Name = "ClickCatcher"
+clickCatcher.Size = UDim2.new(1, 0, 1, 0)
+clickCatcher.BackgroundTransparency = 1
+clickCatcher.Text = ""
+clickCatcher.ZIndex = 9998 -- 最前面に置く
+clickCatcher.Parent = canvasArea
+
+local draggingElement = nil
+local dragStartMouseWidget = nil
+local dragStartOffset = nil
+local dragLoopConn = nil
+
+clickCatcher.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if pickerBlocker.Visible then
+			return
+		end
+
+		local mousePos = input.Position
+		local topElement = nil
+		local highestZIndex = -math.huge
+		local highestChildIndex = -1
+
+		-- 数学的なヒット判定（レイキャスト）
+		local children = canvasArea:GetChildren()
+		for i, child in ipairs(children) do
+			if child:IsA("GuiObject") and child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" then
+				local pos = child.AbsolutePosition
+				local size = child.AbsoluteSize
+
+				if
+					mousePos.X >= pos.X
+					and mousePos.X <= (pos.X + size.X)
+					and mousePos.Y >= pos.Y
+					and mousePos.Y <= (pos.Y + size.Y)
+				then
+					if child.ZIndex > highestZIndex or (child.ZIndex == highestZIndex and i > highestChildIndex) then
+						topElement = child
+						highestZIndex = child.ZIndex
+						highestChildIndex = i
+					end
+				end
+			end
+		end
+
+		if topElement then
+			selectElement(topElement)
+			draggingElement = topElement
+			dragStartMouseWidget = widget:GetRelativeMousePosition()
+			dragStartOffset = topElement.Position
+
+			if dragLoopConn then
+				dragLoopConn:Disconnect()
+			end
+			dragLoopConn = RunService.Heartbeat:Connect(function()
+				if draggingElement then
+					local currentMouse = widget:GetRelativeMousePosition()
+					local deltaX = currentMouse.X - dragStartMouseWidget.X
+					local deltaY = currentMouse.Y - dragStartMouseWidget.Y
+
+					draggingElement.Position = UDim2.new(
+						dragStartOffset.X.Scale,
+						dragStartOffset.X.Offset + deltaX,
+						dragStartOffset.Y.Scale,
+						dragStartOffset.Y.Offset + deltaY
+					)
+					updatePanel()
+				end
+			end)
+
+			-- ★ ここが修正の要！ input.Changed を監視して離した瞬間を逃さない！
+			local endConn
+			endConn = input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					draggingElement = nil
+					if dragLoopConn then
+						dragLoopConn:Disconnect()
+					end
+					endConn:Disconnect()
+				end
+			end)
+		else
+			selectElement(nil)
+		end
+	end
+end)
+
+-- ==========================================
+-- ★ 削除・複製ロジック ★
 -- ==========================================
 local function deleteSelected()
 	if selectedElement then
@@ -657,14 +765,7 @@ local function duplicateSelected()
 			selectedElement.Position.Y.Scale,
 			selectedElement.Position.Y.Offset + 15
 		)
-		-- 複製時にZIndexを手前にする
 		clone.ZIndex = clone.ZIndex + 1
-		local h = clone:FindFirstChild("SelectionHighlight")
-		if h then
-			h:Destroy()
-		end
-
-		makeDraggable(clone)
 		selectElement(clone)
 	end
 end
@@ -676,7 +777,6 @@ local function updateZIndexDirect()
 		updatePanel()
 	end
 end
-
 local function moveZIndex(amount)
 	if selectedElement then
 		selectedElement.ZIndex = selectedElement.ZIndex + amount
@@ -694,7 +794,6 @@ btnZUp.MouseButton1Click:Connect(function()
 	moveZIndex(1)
 end)
 
--- キーボードショートカット
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then
 		return
@@ -715,7 +814,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		deleteSelected()
 	elseif input.KeyCode == Enum.KeyCode.D and ctrlPressed then
 		duplicateSelected()
-	-- ★ ZIndex用ショートカット (Ctrl + ] で手前、Ctrl + [ で奥)
 	elseif input.KeyCode == Enum.KeyCode.RightBracket and ctrlPressed then
 		moveZIndex(1)
 	elseif input.KeyCode == Enum.KeyCode.LeftBracket and ctrlPressed then
@@ -730,14 +828,12 @@ local function applyHexColors()
 		if newBg then
 			selectedElement.BackgroundColor3 = newBg
 		end
-
 		if selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton") then
 			local newTxt = fromHex(txtHex.Text)
 			if newTxt then
 				selectedElement.TextColor3 = newTxt
 			end
 		end
-
 		local grad = selectedElement:FindFirstChildOfClass("UIGradient")
 		if grad then
 			local color2 = fromHex(gr2Hex.Text) or Color3.fromRGB(255, 255, 255)
@@ -775,7 +871,6 @@ gr2Chip.MouseButton1Click:Connect(function()
 		end)
 	end
 end)
-
 for _, btn in ipairs(bgPresets) do
 	btn.MouseButton1Click:Connect(function()
 		bgHex.Text = toHex(btn.BackgroundColor3)
@@ -803,7 +898,6 @@ outlineBox.FocusLost:Connect(function()
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	end
 end)
-
 gradToggleBtn.MouseButton1Click:Connect(function()
 	if selectedElement then
 		local grad = selectedElement:FindFirstChildOfClass("UIGradient")
@@ -816,7 +910,6 @@ gradToggleBtn.MouseButton1Click:Connect(function()
 		updatePanel()
 	end
 end)
-
 textEditBox.FocusLost:Connect(function()
 	if selectedElement and (selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")) then
 		selectedElement.Text = textEditBox.Text
@@ -838,7 +931,6 @@ fontSelectBtn.MouseButton1Click:Connect(function()
 		updatePanel()
 	end
 end)
-
 fontSizeBox.FocusLost:Connect(function()
 	if selectedElement and (selectedElement:IsA("TextLabel") or selectedElement:IsA("TextButton")) then
 		selectedElement.TextSize = tonumber(fontSizeBox.Text) or 14
@@ -846,7 +938,6 @@ fontSizeBox.FocusLost:Connect(function()
 		updatePanel()
 	end
 end)
-
 cornerEditBox.FocusLost:Connect(function()
 	if selectedElement then
 		local c = selectedElement:FindFirstChildOfClass("UICorner") or Instance.new("UICorner", selectedElement)
@@ -910,55 +1001,10 @@ btnXY.MouseButton1Click:Connect(function()
 	setAutoSize(Enum.AutomaticSize.XY)
 end)
 
--- ドラッグ・選択ロジック
-local isSelecting = false
-canvasArea.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		if isSelecting then
-			return
-		end
-		selectedElement = nil
-		selectionHighlight.Parent = nil
-		updatePanel()
-	end
-end)
-function makeDraggable(guiObject)
-	local dragging = false
-	local dragStart, startPos
-	guiObject.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			isSelecting = true
-			selectElement(guiObject)
-			dragging = true
-			dragStart = input.Position
-			startPos = guiObject.Position
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-					isSelecting = false
-					updatePanel()
-				end
-			end)
-		end
-	end)
-	canvasArea.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local delta = input.Position - dragStart
-			guiObject.Position = UDim2.new(
-				startPos.X.Scale + (delta.X / canvasArea.AbsoluteSize.X),
-				0,
-				startPos.Y.Scale + (delta.Y / canvasArea.AbsoluteSize.Y),
-				0
-			)
-			updatePanel()
-		end
-	end)
-end
-
 local function addElementToCanvas(className)
 	local newPart = Instance.new(className)
-	newPart.Active, newPart.Selectable = true, true
-	newPart.Size, newPart.Position = UDim2.new(0, 150, 0, 50), UDim2.new(0.1, 0, 0.1, 0)
+	newPart.Size = UDim2.new(0, 150, 0, 50)
+	newPart.Position = UDim2.new(0.1, 0, 0.1, 0)
 	if className ~= "Frame" then
 		newPart.Text = "New Element"
 		newPart.BackgroundColor3 = className == "TextLabel" and Color3.fromRGB(255, 255, 255)
@@ -974,8 +1020,24 @@ local function addElementToCanvas(className)
 	local s = Instance.new("UIStroke", newPart)
 	s.Color = Color3.fromRGB(150, 150, 150)
 	s.Name = "DesignStroke"
+
 	newPart.Parent = canvasArea
-	makeDraggable(newPart)
+
+	local highestZ = 0
+	for _, child in ipairs(canvasArea:GetChildren()) do
+		if
+			child:IsA("GuiObject")
+			and child ~= newPart
+			and child.Name ~= "SelectionHighlight"
+			and child.Name ~= "ClickCatcher"
+		then
+			if child.ZIndex > highestZ then
+				highestZ = child.ZIndex
+			end
+		end
+	end
+	newPart.ZIndex = highestZ + 1
+
 	selectElement(newPart)
 end
 
@@ -988,18 +1050,15 @@ end)
 btnButton.MouseButton1Click:Connect(function()
 	addElementToCanvas("TextButton")
 end)
+
 btnExport.MouseButton1Click:Connect(function()
 	local exportGui = game:GetService("StarterGui"):FindFirstChild("UIBuilderExport")
 		or Instance.new("ScreenGui", game:GetService("StarterGui"))
 	exportGui.Name = "UIBuilderExport"
 	exportGui:ClearAllChildren()
 	for _, element in ipairs(canvasArea:GetChildren()) do
-		if element:IsA("GuiObject") then
+		if element:IsA("GuiObject") and element.Name ~= "SelectionHighlight" and element.Name ~= "ClickCatcher" then
 			local clone = element:Clone()
-			local h = clone:FindFirstChild("SelectionHighlight")
-			if h then
-				h:Destroy()
-			end
 			clone.Parent = exportGui
 		end
 	end
