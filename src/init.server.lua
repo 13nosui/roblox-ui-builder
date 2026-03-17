@@ -14,7 +14,6 @@ local function isMultiSelectKey()
 		or UserInputService:IsKeyDown(Enum.KeyCode.LeftSuper)
 		or UserInputService:IsKeyDown(Enum.KeyCode.RightSuper)
 end
-
 local function isCtrlOrCmd()
 	return UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)
 		or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
@@ -23,7 +22,6 @@ local function isCtrlOrCmd()
 		or UserInputService:IsKeyDown(Enum.KeyCode.LeftSuper)
 		or UserInputService:IsKeyDown(Enum.KeyCode.RightSuper)
 end
-
 local function isShiftKey()
 	return UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
 end
@@ -31,12 +29,154 @@ end
 local toolbar = plugin:CreateToolbar("UI Builder Pro")
 local toggleButton = toolbar:CreateButton("Open Editor", "UI Builderを開く", "rbxassetid://4483345998")
 
-local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 1050, 800, 850, 450)
+local widgetInfo = DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Float, false, false, 1150, 800, 950, 450)
 local widget = plugin:CreateDockWidgetPluginGui("UIBuilderCanvas", widgetInfo)
 widget.Title = "UI Builder - Figma Pro"
 widget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local elementCount = 0
+
+-- ==========================================
+-- ★ データ保存用シリアライズ機能 (Save & Load) ★
+-- ==========================================
+local function serializeColor(c)
+	return { R = c.R, G = c.G, B = c.B }
+end
+local function deserializeColor(c)
+	return Color3.new(c.R, c.G, c.B)
+end
+local function serializeUDim2(u)
+	return { SX = u.X.Scale, OX = u.X.Offset, SY = u.Y.Scale, OY = u.Y.Offset }
+end
+local function deserializeUDim2(u)
+	return UDim2.new(u.SX, u.OX, u.SY, u.OY)
+end
+local function serializeUDim(u)
+	return { S = u.Scale, O = u.Offset }
+end
+local function deserializeUDim(u)
+	return UDim.new(u.S, u.O)
+end
+
+local function serializeInstance(inst)
+	local data = { ClassName = inst.ClassName, Name = inst.Name }
+	if inst:IsA("GuiObject") then
+		data.Size = serializeUDim2(inst.Size)
+		data.Position = serializeUDim2(inst.Position)
+		data.BackgroundColor3 = serializeColor(inst.BackgroundColor3)
+		data.BackgroundTransparency = inst.BackgroundTransparency
+		data.ZIndex = inst.ZIndex
+		data.AutomaticSize = inst.AutomaticSize.Name
+		if inst:IsA("TextLabel") or inst:IsA("TextButton") then
+			data.Text = inst.Text
+			data.TextColor3 = serializeColor(inst.TextColor3)
+			data.Font = inst.Font.Name
+			data.TextSize = inst.TextSize
+			data.TextWrapped = inst.TextWrapped
+		end
+	elseif inst:IsA("UICorner") then
+		data.CornerRadius = serializeUDim(inst.CornerRadius)
+	elseif inst:IsA("UIStroke") then
+		data.Color = serializeColor(inst.Color)
+		data.Thickness = inst.Thickness
+		data.ApplyStrokeMode = inst.ApplyStrokeMode.Name
+	elseif inst:IsA("UIPadding") then
+		data.PaddingTop = serializeUDim(inst.PaddingTop)
+		data.PaddingBottom = serializeUDim(inst.PaddingBottom)
+		data.PaddingLeft = serializeUDim(inst.PaddingLeft)
+		data.PaddingRight = serializeUDim(inst.PaddingRight)
+	elseif inst:IsA("UIGradient") then
+		data.Color1 = serializeColor(inst.Color.Keypoints[1].Value)
+		data.Color2 = serializeColor(inst.Color.Keypoints[2].Value)
+	end
+	data.Children = {}
+	for _, child in ipairs(inst:GetChildren()) do
+		if child.Name ~= "SelectionHighlight" and child.Name ~= "ClickCatcher" and child.Name ~= "MarqueeBox" then
+			table.insert(data.Children, serializeInstance(child))
+		end
+	end
+	return data
+end
+
+local function deserializeInstance(data, parent)
+	local inst = Instance.new(data.ClassName)
+	inst.Name = data.Name
+	if inst:IsA("GuiObject") then
+		if data.Size then
+			inst.Size = deserializeUDim2(data.Size)
+		end
+		if data.Position then
+			inst.Position = deserializeUDim2(data.Position)
+		end
+		if data.BackgroundColor3 then
+			inst.BackgroundColor3 = deserializeColor(data.BackgroundColor3)
+		end
+		if data.BackgroundTransparency then
+			inst.BackgroundTransparency = data.BackgroundTransparency
+		end
+		if data.ZIndex then
+			inst.ZIndex = data.ZIndex
+		end
+		if data.AutomaticSize then
+			inst.AutomaticSize = Enum.AutomaticSize[data.AutomaticSize]
+		end
+		if inst:IsA("TextLabel") or inst:IsA("TextButton") then
+			if data.Text then
+				inst.Text = data.Text
+			end
+			if data.TextColor3 then
+				inst.TextColor3 = deserializeColor(data.TextColor3)
+			end
+			if data.Font then
+				inst.Font = Enum.Font[data.Font]
+			end
+			if data.TextSize then
+				inst.TextSize = data.TextSize
+			end
+			if data.TextWrapped ~= nil then
+				inst.TextWrapped = data.TextWrapped
+			end
+		end
+	elseif inst:IsA("UICorner") then
+		if data.CornerRadius then
+			inst.CornerRadius = deserializeUDim(data.CornerRadius)
+		end
+	elseif inst:IsA("UIStroke") then
+		if data.Color then
+			inst.Color = deserializeColor(data.Color)
+		end
+		if data.Thickness then
+			inst.Thickness = data.Thickness
+		end
+		if data.ApplyStrokeMode then
+			inst.ApplyStrokeMode = Enum.ApplyStrokeMode[data.ApplyStrokeMode]
+		end
+	elseif inst:IsA("UIPadding") then
+		if data.PaddingTop then
+			inst.PaddingTop = deserializeUDim(data.PaddingTop)
+		end
+		if data.PaddingBottom then
+			inst.PaddingBottom = deserializeUDim(data.PaddingBottom)
+		end
+		if data.PaddingLeft then
+			inst.PaddingLeft = deserializeUDim(data.PaddingLeft)
+		end
+		if data.PaddingRight then
+			inst.PaddingRight = deserializeUDim(data.PaddingRight)
+		end
+	elseif inst:IsA("UIGradient") then
+		if data.Color1 and data.Color2 then
+			inst.Color = ColorSequence.new(deserializeColor(data.Color1), deserializeColor(data.Color2))
+		end
+	end
+	if data.Children then
+		for _, cData in ipairs(data.Children) do
+			deserializeInstance(cData, inst)
+		end
+	end
+	inst.Parent = parent
+	return inst
+end
 
 -- --- 共通UIコンポーネント ---
 local function createTextBox(parent)
@@ -176,21 +316,20 @@ local function createToolButton(text, color, width)
 	return btn
 end
 
-local btnFrame = createToolButton("＋ 四角", Color3.fromRGB(0, 120, 215), 65)
-local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113), 65)
+local btnFrame = createToolButton("＋ 四角", Color3.fromRGB(0, 120, 215), 60)
+local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113), 60)
 local btnButton = createToolButton("＋ Btn", Color3.fromRGB(155, 89, 182), 60)
-local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 70)
-local btnGroup = createToolButton("📦 グループ", Color3.fromRGB(155, 89, 182), 75)
-local btnUngroup = createToolButton("💥 解除", Color3.fromRGB(155, 89, 182), 60)
+local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 65)
+local btnGroup = createToolButton("📦 Group", Color3.fromRGB(155, 89, 182), 70)
+local btnUngroup = createToolButton("💥 解除", Color3.fromRGB(155, 89, 182), 55)
 local btnDuplicate = createToolButton("👯", Color3.fromRGB(80, 80, 80), 30)
 local btnDelete = createToolButton("🗑️", Color3.fromRGB(231, 76, 60), 30)
 local btnUndo = createToolButton("↩️", Color3.fromRGB(60, 60, 60), 30)
 local btnRedo = createToolButton("↪️", Color3.fromRGB(60, 60, 60), 30)
-
--- ★ 新機能：ズームリセットボタン
-local btnZoom = createToolButton("🔍 100%", Color3.fromRGB(60, 60, 60), 70)
-
-local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34), 65)
+local btnZoom = createToolButton("🔍 100%", Color3.fromRGB(60, 60, 60), 65)
+local btnSave = createToolButton("💾 保存", Color3.fromRGB(39, 174, 96), 65)
+local btnLoad = createToolButton("📂 読込", Color3.fromRGB(41, 128, 185), 65)
+local btnExport = createToolButton("📤 出力", Color3.fromRGB(230, 126, 34), 60)
 
 local mainArea = Instance.new("Frame", background)
 mainArea.Size = UDim2.new(1, 0, 1, -50)
@@ -220,7 +359,7 @@ local UIPaddingLayer = Instance.new("UIPadding", layerTitle)
 UIPaddingLayer.PaddingLeft = UDim.new(0, 10)
 
 -- ==========================================
--- ★ 新機能：キャンバス ＆ ワークスペース (Zoom/Pan用) ★
+-- ★ キャンバス ＆ ワークスペース (Zoom/Pan用) ★
 -- ==========================================
 local canvasArea = Instance.new("Frame", mainArea)
 canvasArea.Size = UDim2.new(1, -460, 1, 0)
@@ -229,13 +368,11 @@ canvasArea.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 canvasArea.BorderSizePixel = 0
 canvasArea.ClipsDescendants = true
 
--- ★ 要素を格納する透明なワークスペース（これが移動・拡大縮小される）
 local workspaceFrame = Instance.new("Frame", canvasArea)
 workspaceFrame.Name = "Workspace"
 workspaceFrame.Size = UDim2.new(0, 0, 0, 0)
 workspaceFrame.Position = UDim2.new(0, 0, 0, 0)
 workspaceFrame.BackgroundTransparency = 1
-
 local currentScale = 1
 local workspaceScale = Instance.new("UIScale", workspaceFrame)
 workspaceScale.Scale = currentScale
@@ -406,8 +543,6 @@ end)
 -- ★ ZOOM & PAN コントロール ★
 -- ==========================================
 local isSpacePressed = false
-
--- スペースキーの監視
 UserInputService.InputBegan:Connect(function(input, gp)
 	if input.KeyCode == Enum.KeyCode.Space and not UserInputService:GetFocusedTextBox() then
 		isSpacePressed = true
@@ -419,7 +554,6 @@ UserInputService.InputEnded:Connect(function(input, gp)
 	end
 end)
 
--- ズームリセット
 btnZoom.MouseButton1Click:Connect(function()
 	currentScale = 1
 	workspaceScale.Scale = currentScale
@@ -427,31 +561,20 @@ btnZoom.MouseButton1Click:Connect(function()
 	btnZoom.Text = "🔍 100%"
 end)
 
--- ズーム処理 (マウスホイール)
 canvasArea.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseWheel then
 		local oldScale = currentScale
-		-- ホイールの回転方向に応じて 10% ずつズーム
 		currentScale = math.clamp(currentScale + (input.Position.Z * 0.1 * currentScale), 0.1, 5)
 		workspaceScale.Scale = currentScale
-
-		-- ★ マウスカーソルの位置を中心にズームイン/アウトする計算
 		local mousePos = input.Position
 		local wx = workspaceFrame.AbsolutePosition.X
 		local wy = workspaceFrame.AbsolutePosition.Y
-
-		-- ズーム前のマウスのローカル座標
 		local rx = (mousePos.X - wx) / oldScale
 		local ry = (mousePos.Y - wy) / oldScale
-
-		-- 新しいスケールでのワークスペースの絶対座標を逆算
 		local newWx = mousePos.X - (rx * currentScale)
 		local newWy = mousePos.Y - (ry * currentScale)
-
-		-- ワークスペースの Position を更新 (CanvasAreaからの相対座標)
 		workspaceFrame.Position =
 			UDim2.new(0, newWx - canvasArea.AbsolutePosition.X, 0, newWy - canvasArea.AbsolutePosition.Y)
-
 		btnZoom.Text = "🔍 " .. math.floor(currentScale * 100) .. "%"
 	end
 end)
@@ -525,9 +648,63 @@ local function redoState()
 		loadState(historyIndex)
 	end
 end
-
 btnUndo.MouseButton1Click:Connect(undoState)
 btnRedo.MouseButton1Click:Connect(redoState)
+
+-- ==========================================
+-- ★ SAVE / LOAD システム (設定領域への保存) ★
+-- ==========================================
+btnSave.MouseButton1Click:Connect(function()
+	local projectData = {}
+	for _, child in ipairs(workspaceFrame:GetChildren()) do
+		if
+			child:IsA("GuiObject")
+			and not child.Name:match("Highlight")
+			and child.Name ~= "ClickCatcher"
+			and child.Name ~= "MarqueeBox"
+		then
+			table.insert(projectData, serializeInstance(child))
+		end
+	end
+	plugin:SetSetting("UIBuilderPro_SaveData", projectData)
+	print("[UI Builder Pro] プロジェクトを保存しました！")
+	local oldText = btnSave.Text
+	btnSave.Text = "✅ 保存済"
+	task.delay(1.5, function()
+		btnSave.Text = oldText
+	end)
+end)
+
+btnLoad.MouseButton1Click:Connect(function()
+	local projectData = plugin:GetSetting("UIBuilderPro_SaveData")
+	if projectData then
+		if _G.clearSelection then
+			_G.clearSelection()
+		end
+		for _, child in ipairs(workspaceFrame:GetChildren()) do
+			if
+				child:IsA("GuiObject")
+				and not child.Name:match("Highlight")
+				and child.Name ~= "ClickCatcher"
+				and child.Name ~= "MarqueeBox"
+			then
+				child:Destroy()
+			end
+		end
+		for _, childData in ipairs(projectData) do
+			deserializeInstance(childData, workspaceFrame)
+		end
+		saveState()
+		print("[UI Builder Pro] 保存されたプロジェクトを復元しました！")
+		local oldText = btnLoad.Text
+		btnLoad.Text = "✅ 読込済"
+		task.delay(1.5, function()
+			btnLoad.Text = oldText
+		end)
+	else
+		print("[UI Builder Pro] 保存されているデータがありません。")
+	end
+end)
 
 -- ==========================================
 -- ★ 60fps カラーピッカー ★
@@ -748,21 +925,21 @@ confirmBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- ★ 複数選択・ハイライト管理 (Scale対応) ★
+-- ★ 複数選択・ハイライト管理 (絶対座標対応) ★
 -- ==========================================
 local selectedElements = {}
 local highlightFrames = {}
 local isResizing = false
 _G.isRenamingLayer = false
 
--- ★ ハイライトも Workspace の中に入れることでズーム時に自動追従させる
+-- ★ ハイライトとハンドルをcanvasAreaに配置してズーム影響を受けないようにする
 local selectionHighlight = Instance.new("Frame")
 selectionHighlight.Name = "SelectionHighlight"
 selectionHighlight.BackgroundTransparency = 1
 selectionHighlight.Active = false
 selectionHighlight.ZIndex = 9999
 selectionHighlight.Visible = false
-selectionHighlight.Parent = workspaceFrame
+selectionHighlight.Parent = canvasArea
 local shStroke = Instance.new("UIStroke", selectionHighlight)
 shStroke.Color = Color3.fromRGB(0, 162, 255)
 shStroke.Thickness = 2
@@ -829,23 +1006,22 @@ function _G.refreshHighlights()
 		s.Thickness = 2
 		s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		local c = Instance.new("UICorner", hl)
-		hl.Parent = workspaceFrame
+		hl.Parent = canvasArea
 		table.insert(highlightFrames, { frame = hl, target = el, corner = c })
 	end
 end
 
+-- ★ ここで絶対座標を使ってハイライトを画面にピッタリ追従させます！
 RunService.Heartbeat:Connect(function()
-	local workspaceAbsPos = workspaceFrame.AbsolutePosition
+	local canvasAbsPos = canvasArea.AbsolutePosition
 	for _, hd in ipairs(highlightFrames) do
 		if hd.target and hd.target.Parent then
-			-- スケール適用前のローカル座標に変換して追従
-			hd.frame.Size =
-				UDim2.new(0, hd.target.AbsoluteSize.X / currentScale, 0, hd.target.AbsoluteSize.Y / currentScale)
+			hd.frame.Size = UDim2.new(0, hd.target.AbsoluteSize.X, 0, hd.target.AbsoluteSize.Y)
 			hd.frame.Position = UDim2.new(
 				0,
-				(hd.target.AbsolutePosition.X - workspaceAbsPos.X) / currentScale,
+				hd.target.AbsolutePosition.X - canvasAbsPos.X,
 				0,
-				(hd.target.AbsolutePosition.Y - workspaceAbsPos.Y) / currentScale
+				hd.target.AbsolutePosition.Y - canvasAbsPos.Y
 			)
 			local c = hd.target:FindFirstChildOfClass("UICorner")
 			hd.corner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
@@ -855,18 +1031,11 @@ RunService.Heartbeat:Connect(function()
 	if #selectedElements == 1 then
 		local target = selectedElements[1]
 		selectionHighlight.Visible = true
-		if not isResizing then
-			selectionHighlight.Size =
-				UDim2.new(0, target.AbsoluteSize.X / currentScale, 0, target.AbsoluteSize.Y / currentScale)
-			selectionHighlight.Position = UDim2.new(
-				0,
-				(target.AbsolutePosition.X - workspaceAbsPos.X) / currentScale,
-				0,
-				(target.AbsolutePosition.Y - workspaceAbsPos.Y) / currentScale
-			)
-			local c = target:FindFirstChildOfClass("UICorner")
-			shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
-		end
+		selectionHighlight.Size = UDim2.new(0, target.AbsoluteSize.X, 0, target.AbsoluteSize.Y)
+		selectionHighlight.Position =
+			UDim2.new(0, target.AbsolutePosition.X - canvasAbsPos.X, 0, target.AbsolutePosition.Y - canvasAbsPos.Y)
+		local c = target:FindFirstChildOfClass("UICorner")
+		shCorner.CornerRadius = c and c.CornerRadius or UDim.new(0, 0)
 	else
 		selectionHighlight.Visible = false
 	end
@@ -891,7 +1060,6 @@ for name, data in pairs(resizeHandles) do
 			resizeLoopConn = RunService.Heartbeat:Connect(function()
 				if isResizing and targetElement then
 					local currentMouse = widget:GetRelativeMousePosition()
-					-- ★ マウス移動量もスケールで割って、正しいローカルサイズを計算する！
 					local deltaX = (currentMouse.X - startMouse.X) / currentScale
 					local deltaY = (currentMouse.Y - startMouse.Y) / currentScale
 					local newSizeX = startSize.X.Offset
@@ -922,18 +1090,6 @@ for name, data in pairs(resizeHandles) do
 
 					targetElement.Size = UDim2.new(startSize.X.Scale, newSizeX, startSize.Y.Scale, newSizeY)
 					targetElement.Position = UDim2.new(startPos.X.Scale, newPosX, startPos.Y.Scale, newPosY)
-					selectionHighlight.Size = UDim2.new(
-						0,
-						targetElement.AbsoluteSize.X / currentScale,
-						0,
-						targetElement.AbsoluteSize.Y / currentScale
-					)
-					selectionHighlight.Position = UDim2.new(
-						0,
-						(targetElement.AbsolutePosition.X - workspaceFrame.AbsolutePosition.X) / currentScale,
-						0,
-						(targetElement.AbsolutePosition.Y - workspaceFrame.AbsolutePosition.Y) / currentScale
-					)
 					if _G.updatePanelVisuals then
 						_G.updatePanelVisuals(newSizeX, newSizeY)
 					end
@@ -1431,7 +1587,6 @@ clickCatcher.InputBegan:Connect(function(input)
 		return
 	end
 
-	-- ★ パン（移動）判定: 中ボタン または Space+左クリック
 	if
 		input.UserInputType == Enum.UserInputType.MouseButton3
 		or (input.UserInputType == Enum.UserInputType.MouseButton1 and isSpacePressed)
@@ -1439,7 +1594,6 @@ clickCatcher.InputBegan:Connect(function(input)
 		isPanning = true
 		local startMouseWidget = widget:GetRelativeMousePosition()
 		local startWsPos = workspaceFrame.Position
-
 		local panConn
 		panConn = RunService.Heartbeat:Connect(function()
 			if isPanning then
@@ -1452,7 +1606,6 @@ clickCatcher.InputBegan:Connect(function(input)
 				)
 			end
 		end)
-
 		local endConn
 		endConn = input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
@@ -1463,7 +1616,7 @@ clickCatcher.InputBegan:Connect(function(input)
 				endConn:Disconnect()
 			end
 		end)
-		return -- パン中は要素の選択処理を行わない
+		return
 	end
 
 	if
@@ -1527,7 +1680,6 @@ clickCatcher.InputBegan:Connect(function(input)
 			dragLoopConn = RunService.Heartbeat:Connect(function()
 				if dragging then
 					local currentMouse = widget:GetRelativeMousePosition()
-					-- ★ マウスの移動量をスケールで割って正確なローカル移動量にする！
 					local deltaX = (currentMouse.X - dragStartMouseWidget.X) / currentScale
 					local deltaY = (currentMouse.Y - dragStartMouseWidget.Y) / currentScale
 					for _, el in ipairs(selectedElements) do
@@ -1965,7 +2117,6 @@ end)
 local function addElementToCanvas(className)
 	elementCount = elementCount + 1
 	local newPart = Instance.new(className)
-
 	if className == "Frame" then
 		newPart.Name = "Rectangle " .. elementCount
 	elseif className == "TextLabel" then
@@ -1975,13 +2126,10 @@ local function addElementToCanvas(className)
 	end
 
 	newPart.Size = UDim2.new(0, 150, 0, 50)
-
-	-- ★ ズーム中でも、画面の中央付近に生成されるように計算
 	local centerAbsX = canvasArea.AbsolutePosition.X + canvasArea.AbsoluteSize.X / 2
 	local centerAbsY = canvasArea.AbsolutePosition.Y + canvasArea.AbsoluteSize.Y / 2
 	local localX = (centerAbsX - workspaceFrame.AbsolutePosition.X) / currentScale
 	local localY = (centerAbsY - workspaceFrame.AbsolutePosition.Y) / currentScale
-
 	newPart.Position =
 		UDim2.new(0, math.floor(localX / snapSize) * snapSize, 0, math.floor(localY / snapSize) * snapSize)
 
