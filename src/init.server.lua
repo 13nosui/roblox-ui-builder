@@ -39,6 +39,7 @@ local elementCount = 0
 -- ==========================================
 -- ★ データ保存用シリアライズ機能 (Save & Load) ★
 -- ==========================================
+-- ※過去の「Btn」データが壊れないよう、読み込み側の対応は残してあります。
 local function serializeColor(c)
 	return { R = c.R, G = c.G, B = c.B }
 end
@@ -317,8 +318,8 @@ local function createToolButton(text, color, width)
 end
 
 local btnFrame = createToolButton("＋ 四角", Color3.fromRGB(0, 120, 215), 60)
+local btnCircle = createToolButton("＋ 丸", Color3.fromRGB(155, 89, 182), 60)
 local btnText = createToolButton("＋ 文字", Color3.fromRGB(46, 204, 113), 60)
-local btnButton = createToolButton("＋ Btn", Color3.fromRGB(155, 89, 182), 60)
 local btnSnap = createToolButton("🧲 10px", Color3.fromRGB(52, 152, 219), 65)
 local btnGroup = createToolButton("📦 Group", Color3.fromRGB(155, 89, 182), 70)
 local btnUngroup = createToolButton("💥 解除", Color3.fromRGB(155, 89, 182), 55)
@@ -932,7 +933,6 @@ local highlightFrames = {}
 local isResizing = false
 _G.isRenamingLayer = false
 
--- ★ ハイライトとハンドルをcanvasAreaに配置してズーム影響を受けないようにする
 local selectionHighlight = Instance.new("Frame")
 selectionHighlight.Name = "SelectionHighlight"
 selectionHighlight.BackgroundTransparency = 1
@@ -1011,7 +1011,6 @@ function _G.refreshHighlights()
 	end
 end
 
--- ★ ここで絶対座標を使ってハイライトを画面にピッタリ追従させます！
 RunService.Heartbeat:Connect(function()
 	local canvasAbsPos = canvasArea.AbsolutePosition
 	for _, hd in ipairs(highlightFrames) do
@@ -1134,6 +1133,7 @@ function _G.updateLayerPanel()
 		item.LayoutOrder = orderCounter
 		item.Parent = layerPanel
 
+		-- ★ アイコン判定に「丸 (⚪)」を追加！
 		local icon = Instance.new("TextLabel", item)
 		icon.Size = UDim2.new(0, 20, 1, 0)
 		icon.Position = UDim2.new(0, depth * 15 + 5, 0, 0)
@@ -1141,6 +1141,8 @@ function _G.updateLayerPanel()
 		icon.TextColor3 = Color3.fromRGB(150, 150, 150)
 		if el.Name:match("Group") then
 			icon.Text = "📦"
+		elseif el.Name:match("Circle") then
+			icon.Text = "⚪"
 		elseif el:IsA("TextLabel") then
 			icon.Text = "T"
 		elseif el:IsA("TextButton") then
@@ -2114,18 +2116,37 @@ btnXY.MouseButton1Click:Connect(function()
 	setAutoSize(Enum.AutomaticSize.XY)
 end)
 
-local function addElementToCanvas(className)
+-- ==========================================
+-- ★ 新機能：丸 (Circle) の追加処理 ★
+-- ==========================================
+local function addElementToCanvas(elementType)
 	elementCount = elementCount + 1
-	local newPart = Instance.new(className)
-	if className == "Frame" then
+	local newPart
+	local className = elementType == "Circle" and "Frame" or elementType
+	newPart = Instance.new(className)
+
+	if elementType == "Frame" then
 		newPart.Name = "Rectangle " .. elementCount
-	elseif className == "TextLabel" then
+		newPart.Size = UDim2.new(0, 150, 0, 50)
+		newPart.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	elseif elementType == "Circle" then
+		newPart.Name = "Circle " .. elementCount
+		newPart.Size = UDim2.new(0, 100, 0, 100)
+		newPart.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		local corner = Instance.new("UICorner", newPart)
+		corner.CornerRadius = UDim.new(1, 0) -- 100%の角丸で完全な円に
+	elseif elementType == "TextLabel" then
 		newPart.Name = "Text " .. elementCount
-	elseif className == "TextButton" then
-		newPart.Name = "Button " .. elementCount
+		newPart.Size = UDim2.new(0, 150, 0, 50)
+		newPart.Text = "New Element"
+		newPart.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		newPart.Font = Enum.Font.GothamBold
+		newPart.TextSize = 18
+		newPart.TextScaled = false
+		local p = Instance.new("UIPadding", newPart)
+		p.PaddingLeft, p.PaddingRight = UDim.new(0, 15), UDim.new(0, 15)
 	end
 
-	newPart.Size = UDim2.new(0, 150, 0, 50)
 	local centerAbsX = canvasArea.AbsolutePosition.X + canvasArea.AbsoluteSize.X / 2
 	local centerAbsY = canvasArea.AbsolutePosition.Y + canvasArea.AbsoluteSize.Y / 2
 	local localX = (centerAbsX - workspaceFrame.AbsolutePosition.X) / currentScale
@@ -2133,18 +2154,6 @@ local function addElementToCanvas(className)
 	newPart.Position =
 		UDim2.new(0, math.floor(localX / snapSize) * snapSize, 0, math.floor(localY / snapSize) * snapSize)
 
-	if className ~= "Frame" then
-		newPart.Text = "New Element"
-		newPart.BackgroundColor3 = className == "TextLabel" and Color3.fromRGB(255, 255, 255)
-			or Color3.fromRGB(46, 204, 113)
-		newPart.Font = Enum.Font.GothamBold
-		newPart.TextSize = 18
-		newPart.TextScaled = false
-		local p = Instance.new("UIPadding", newPart)
-		p.PaddingLeft, p.PaddingRight = UDim.new(0, 15), UDim.new(0, 15)
-	else
-		newPart.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	end
 	local s = Instance.new("UIStroke", newPart)
 	s.Color = Color3.fromRGB(150, 150, 150)
 	s.Name = "DesignStroke"
@@ -2176,8 +2185,9 @@ end)
 btnText.MouseButton1Click:Connect(function()
 	addElementToCanvas("TextLabel")
 end)
-btnButton.MouseButton1Click:Connect(function()
-	addElementToCanvas("TextButton")
+-- ★ Btnの代わりにCircle関数を呼び出す
+btnCircle.MouseButton1Click:Connect(function()
+	addElementToCanvas("Circle")
 end)
 
 btnExport.MouseButton1Click:Connect(function()
